@@ -1,0 +1,22 @@
+{
+  "name": "switch-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Zero-knowledge sync backend for the Switch session bridge.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "dev": "node --env-file-if-exists=.env --watch src/server.js",
+    "test": "node --env-file-if-exists=.env --test \"test/**/*.test.js\"",
+    "smoke": "node --env-file-if-exists=.env --test test/smoke.test.js",
+    "test:router": "node --test test/router.test.js",
+    "clear-db": "node --env-file-if-exists=.env scripts/clear-db.js"
+  },
+  "dependencies": {
+    "express": "^5.3.0",
+    "mongodb": "6.13.0"
+  }
+}

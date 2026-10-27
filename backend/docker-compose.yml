@@ -1,0 +1,35 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DB: switch
+      # Lock this down to your real extension IDs in production.
+      ALLOWED_ORIGINS: "chrome-extension://,moz-extension://,edge-extension://,extension://"
+    volumes:
+      - ./src:/app/src
+    command: ["node", "--watch", "src/server.js"]
+    ports:
+      - "8080:8080"
+
+volumes:
+  mongo-data:

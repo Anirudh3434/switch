@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Switch — Before you begin</title>
+    <link rel="stylesheet" href="onboarding.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <div class="brand">
+        <img src="../assets/icon-48.png" alt="Switch" class="logo" />
+        <div>
+          <h1>Switch</h1>
+          <p class="tag">Session Bridge</p>
+        </div>
+      </div>
+
+      <div class="progress" aria-hidden="true">
+        <span class="bar on"></span><span class="bar"></span><span class="bar"></span>
+      </div>
+
+      <!-- STEP 1 — what it does -->
+      <section class="step" data-step="1">
+        <h2>Move a logged-in session between your own browsers</h2>
+        <p>
+          Sign in once on one browser. Switch saves that site's login state —
+          encrypted — and lets you restore it in another browser, so you don't
+          type your password again.
+        </p>
+        <p class="muted">
+          Nothing is collected in the background. Switch only touches a site
+          after you explicitly grant it access to that site.
+        </p>
+        <div class="nav">
+          <button class="primary" data-next>Continue</button>
+        </div>
+      </section>
+
+      <!-- STEP 2 — the disclosure -->
+      <section class="step hidden" data-step="2">
+        <h2>What Switch reads, and when</h2>
+        <p>
+          To work, Switch needs access to the login state of the sites
+          <strong>you choose</strong>. Specifically:
+        </p>
+
+        <table class="disclosure">
+          <thead>
+            <tr><th>Data</th><th>When it's read</th><th>Where it goes</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Cookies</strong><br /><span class="muted">including session cookies</span></td>
+              <td>Only when you click <em>Save this session</em> or <em>Restore</em>, on a site you've granted</td>
+              <td>Encrypted on your device</td>
+            </tr>
+            <tr>
+              <td><strong>localStorage &amp; site tokens</strong></td>
+              <td>Same — only on granted sites, only when you act</td>
+              <td>Encrypted on your device</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <ul class="facts">
+          <li>Access is requested <strong>one site at a time</strong>, using your browser's own permission prompt.</li>
+          <li>Switch does <strong>not</strong> request access to all websites when you install it.</li>
+          <li>Your sessions are encrypted with a key derived from your password. Switch's server never holds that key.</li>
+        </ul>
+
+        <div class="nav">
+          <button class="ghost" data-back>Back</button>
+          <button class="primary" data-next>Continue</button>
+        </div>
+      </section>
+
+      <!-- STEP 3 — limits, honestly -->
+      <section class="step hidden" data-step="3">
+        <h2>What Switch cannot do</h2>
+        <p>We'd rather tell you now than let you find out the hard way.</p>
+
+        <ul class="limits">
+          <li>
+            <strong>Some sites will still ask you to log in again.</strong>
+            Banks, streaming services and Google often bind a session to a device
+            or IP. The cookies restore fine — the site just refuses them. Switch
+            will tell you when that happens.
+          </li>
+          <li>
+            <strong>Passkeys can't be moved.</strong> They're designed to never
+            leave your device. Nothing can change that.
+          </li>
+          <li>
+            <strong>No phone, no Safari yet.</strong> Browser restrictions block
+            it. Chromium and Firefox only for now.
+          </li>
+          <li>
+            <strong>You are responsible for your password.</strong> If you lose
+            it, your saved sessions can't be recovered — not by you, not by us.
+          </li>
+        </ul>
+
+        <div class="nav">
+          <button class="ghost" data-back>Back</button>
+          <button class="primary" data-next>Continue</button>
+        </div>
+      </section>
+
+      <!-- STEP 4 — consent -->
+      <section class="step hidden" data-step="4">
+        <h2>Your consent</h2>
+        <p>
+          Please confirm you understand what Switch reads before it can be used.
+        </p>
+
+        <label class="check">
+          <input type="checkbox" id="agree" />
+          <span>
+            I understand that Switch reads <strong>cookies, localStorage and
+            session tokens</strong> for the sites I explicitly grant — and only
+            when I choose to save or restore a session on those sites.
+          </span>
+        </label>
+
+        <label class="check">
+          <input type="checkbox" id="privacy" />
+          <span>
+            I have read the <a href="privacy.html" id="privacyLink">privacy policy</a>.
+          </span>
+        </label>
+
+        <p class="muted small">
+          You can withdraw consent and delete all saved sessions at any time from
+          the extension's settings.
+        </p>
+
+        <div class="nav">
+          <button class="ghost" data-back>Back</button>
+          <button class="primary" id="accept" disabled>Agree &amp; continue</button>
+        </div>
+        <button class="decline" id="decline">I don't agree — don't use Switch</button>
+      </section>
+
+      <p class="foot">Switch never collects your passwords.</p>
+    </main>
+
+    <script type="module" src="onboarding.js"></script>
+  </body>
+</html>

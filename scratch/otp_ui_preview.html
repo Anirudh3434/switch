@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Switch — Minimal OTP Verification UI Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700;800&family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../src/popup/popup.css" />
+  <style>
+    body {
+      background: #04060a;
+      padding: 30px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      color: #f8fafc;
+    }
+    .preview-header {
+      text-align: center;
+    }
+    .preview-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #00f2fe;
+      letter-spacing: -0.01em;
+    }
+    .preview-subtitle {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 4px;
+    }
+    .preview-container {
+      width: 375px;
+      background: var(--bg-canvas, #0a0d14);
+      border: 1px solid #1e2538;
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.8), 0 0 40px rgba(14,165,233,0.12);
+      position: relative;
+      overflow: hidden;
+    }
+    .screen-view {
+      display: flex !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="preview-header">
+    <div class="preview-title">SWITCH VAULT — ULTRA-MINIMAL OTP VERIFICATION</div>
+    <div class="preview-subtitle">Clean typography · Zero green dots · Low-friction design</div>
+  </div>
+
+  <div class="preview-container">
+    <div class="ambient-gradient-mesh" aria-hidden="true">
+      <div class="ambient-orb ambient-orb-1"></div>
+      <div class="ambient-orb ambient-orb-2"></div>
+    </div>
+
+    <!-- STEP 1.5: EMAIL OTP VERIFICATION -->
+    <section id="view-otp" class="screen-view">
+      <div class="brand-hero">
+        <div class="brand-hero-left">
+          <img src="../src/assets/mail-icon.jpg" alt="Verify Email" class="otp-mail-icon-hero" width="36" height="36" />
+          <div>
+            <h1 class="brand-title">Verify Email</h1>
+            <p class="brand-subtitle">Code sent to <strong id="otp-target-email" class="otp-email-text">anirudhbharat415@gmail.com</strong></p>
+          </div>
+        </div>
+        <button id="theme-toggle-btn-otp" class="theme-toggle-btn" title="Toggle theme (light/dark)" aria-label="Toggle theme">
+          <svg class="theme-icon-dark" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
+      </div>
+
+      <form id="otp-form" class="otp-form" autocomplete="off" onsubmit="event.preventDefault();">
+        <div class="otp-inputs-row" id="otp-inputs-row">
+          <input type="text" inputmode="numeric" maxlength="1" class="otp-digit-input filled" value="8" />
+          <input type="text" inputmode="numeric" maxlength="1" class="otp-digit-input filled" value="4" />
+          <input type="text" inputmode="numeric" maxlength="1" class="otp-digit-input filled" value="1" />
+          <input type="text" inputmode="numeric" maxlength="1" class="otp-digit-input" autofocus />
+          <input type="text" inputmode="numeric" maxlength="1" class="otp-digit-input" />
+          <input type="text" inputmode="numeric" maxlength="1" class="otp-digit-input" />
+        </div>
+
+        <div class="otp-meta-row">
+          <div id="otp-timer-badge" class="otp-meta-timer">
+            Resend in <strong id="otp-countdown">48s</strong>
+          </div>
+          <button type="button" id="otp-paste-btn" class="otp-paste-link">Paste Code</button>
+        </div>
+
+        <button type="submit" id="otp-verify-btn" class="btn btn-primary btn-block otp-verify-submit-btn">
+          Verify & Complete
+        </button>
+
+        <button type="button" id="otp-back-btn" class="btn btn-subtle btn-block otp-back-btn">
+          ← Back to Sign in
+        </button>
+      </form>
+    </section>
+  </div>
+</body>
+</html>

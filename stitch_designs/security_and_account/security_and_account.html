@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<meta content="mobile_tab" name="shell-type"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<style>
+    @layer base {
+      html, body {
+        width: 100vw;
+        margin: 0;
+        padding: 0;
+        background-color: #121315;
+        color: #e3e2e5;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+      body {
+        overscroll-behavior: none;
+      }
+      .pb-safe {
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
+      .pt-safe {
+        padding-top: env(safe-area-inset-top, 0px);
+      }
+      main > :first-child {
+        margin-top: 0 !important;
+      }
+      main > :last-child {
+        margin-bottom: 0 !important;
+      }
+    }
+    ::-webkit-scrollbar {
+      display: none;
+    }
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-tertiary": "#213145",
+            "background": "#121315",
+            "on-tertiary-container": "#35455a",
+            "surface-bright": "#38393b",
+            "on-error-container": "#ffdad6",
+            "secondary-fixed": "#6ffbbe",
+            "on-background": "#e3e2e5",
+            "secondary-container": "#00a572",
+            "surface-dim": "#121315",
+            "surface-container": "#1f2022",
+            "primary-fixed-dim": "#7bd0ff",
+            "on-secondary-fixed": "#002113",
+            "on-surface": "#e3e2e5",
+            "surface": "#121315",
+            "on-primary-fixed": "#001e2c",
+            "on-secondary": "#003824",
+            "on-primary": "#00354a",
+            "on-secondary-container": "#00311f",
+            "tertiary": "#bdcee7",
+            "secondary": "#4edea3",
+            "primary": "#8ed5ff",
+            "on-primary-fixed-variant": "#004c69",
+            "surface-container-highest": "#343537",
+            "on-tertiary-fixed-variant": "#38485d",
+            "error": "#ffb4ab",
+            "outline": "#87929a",
+            "surface-tint": "#7bd0ff",
+            "inverse-on-surface": "#303033",
+            "outline-variant": "#3e484f",
+            "primary-container": "#38bdf8",
+            "surface-container-low": "#1b1c1e",
+            "secondary-fixed-dim": "#4edea3",
+            "on-tertiary-fixed": "#0b1c30",
+            "tertiary-container": "#a2b2cb",
+            "on-primary-container": "#004965",
+            "error-container": "#93000a",
+            "surface-container-high": "#292a2c",
+            "on-surface-variant": "#bdc8d1",
+            "tertiary-fixed-dim": "#b7c8e1",
+            "surface-container-lowest": "#0d0e10",
+            "on-error": "#690005",
+            "primary-fixed": "#c4e7ff",
+            "tertiary-fixed": "#d3e4fe",
+            "on-secondary-fixed-variant": "#005236",
+            "inverse-primary": "#00668a",
+            "inverse-surface": "#e3e2e5",
+            "surface-variant": "#343537"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "spacing": {
+            "space-xs": "0.25rem",
+            "space-md": "0.75rem",
+            "margin": "1rem",
+            "space-xl": "2rem",
+            "space-lg": "1.25rem",
+            "margin-desktop": "2rem",
+            "gutter-desktop": "1.5rem",
+            "space-sm": "0.5rem",
+            "gutter": "1rem"
+          },
+          "fontFamily": {
+            "code-sm": ["JetBrains Mono"],
+            "headline-md": ["Inter"],
+            "body-lg": ["Inter"],
+            "headline-lg": ["Inter"],
+            "label-sm": ["Inter"],
+            "headline-lg-mobile": ["Inter"],
+            "body-sm": ["Inter"],
+            "headline-sm": ["Inter"],
+            "display": ["Inter"],
+            "label-md": ["Inter"],
+            "body-md": ["Inter"],
+            "code-md": ["JetBrains Mono"]
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="bg-surface font-body-md text-on-surface antialiased min-h-screen flex flex-col selection:bg-primary-container/30">
+<!-- Header -->
+<header class="fixed top-0 w-full z-50 bg-surface/85 backdrop-blur-xl border-b border-outline-variant/30 pt-safe">
+<div class="h-14 px-4 flex items-center justify-between gap-3">
+<div class="flex items-center gap-3 min-w-0">
+<div class="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-surface-container-high border border-outline-variant/40 flex items-center justify-center text-primary-container">
+<span class="material-symbols-outlined text-[1.125rem]">shield</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="font-headline-sm text-[15px] font-semibold tracking-tight text-on-surface">Switch</span>
+<span class="font-code-sm text-[10px] px-1.5 py-0.5 rounded bg-surface-container-high text-primary border border-outline-variant/30 font-medium">v2.4</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span class="font-code-sm text-[10px] text-on-surface-variant uppercase tracking-wider">Active Sync</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-1.5">
+<button aria-label="Search" class="w-9 h-9 rounded-lg bg-surface-container-low hover:bg-surface-container border border-outline-variant/30 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors" type="button">
+<span class="material-symbols-outlined text-[1.125rem]">search</span>
+</button>
+<button aria-label="Sync Trigger" class="w-9 h-9 rounded-lg bg-surface-container-low hover:bg-surface-container border border-outline-variant/30 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors" type="button">
+<span class="material-symbols-outlined text-[1.125rem]">sync</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex flex-col relative w-full pt-14 pb-24 bg-surface min-h-screen">
+<div class="flex flex-col w-full px-4 py-4 gap-3.5 max-w-lg mx-auto">
+<!-- Cryptographic Hardware Sentinel Notice -->
+<div class="flex items-center justify-between px-3.5 py-2.5 bg-surface-container-low border border-outline-variant/30 rounded-xl">
+<div class="flex items-center gap-2.5 min-w-0">
+<div class="relative flex items-center justify-center w-2 h-2 flex-shrink-0">
+<span class="absolute inline-flex w-full h-full rounded-full bg-secondary opacity-60 animate-ping"></span>
+<span class="relative inline-flex w-2 h-2 rounded-full bg-secondary"></span>
+</div>
+<span class="font-code-sm text-[11px] text-on-surface-variant tracking-tight truncate uppercase">Cryptographic Handshake Valid</span>
+</div>
+<span class="font-code-sm text-[10px] px-2 py-0.5 rounded bg-surface-container-high border border-outline-variant/30 text-primary font-medium tracking-wide">TLS 1.3</span>
+</div>
+<!-- Primary Account Identity Card -->
+<div class="flex flex-col bg-surface-container-low border border-outline-variant/30 rounded-xl p-4 gap-4 shadow-sm">
+<div class="flex items-start justify-between gap-3">
+<div class="flex items-center gap-3 min-w-0">
+<!-- Subtle Avatar with Understated Status -->
+<div class="relative flex-shrink-0">
+<div class="w-11 h-11 rounded-lg bg-surface-container-high border border-outline-variant/40 flex items-center justify-center text-primary font-semibold text-[17px]">
+                A
+              </div>
+<span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-surface-container-low rounded-full flex items-center justify-center">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+</span>
+</div>
+<!-- Identity Details -->
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="font-headline-sm text-[14px] text-on-surface truncate font-semibold">anigokala3@gmail.com</span>
+</div>
+<button class="group flex items-center gap-1.5 text-left text-on-surface-variant hover:text-primary transition-colors mt-0.5 focus:outline-none" id="copy-hash-btn" type="button">
+<span class="font-code-sm text-[11px] text-on-surface-variant/80 group-hover:text-primary truncate max-w-[170px]">6ad83ec6294bbb1b28d41b2c</span>
+<span class="material-symbols-outlined text-[0.875rem] opacity-50 group-hover:opacity-100">content_copy</span>
+</button>
+</div>
+</div>
+<!-- Understated Active Status Indicator -->
+<div class="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-secondary/10 border border-secondary/20">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span class="font-code-sm text-[10px] text-secondary font-medium uppercase tracking-wider">Active</span>
+</div>
+</div>
+<!-- Telemetry Stats -->
+<div class="grid grid-cols-3 gap-2 pt-1 border-t border-outline-variant/20">
+<div class="flex flex-col p-2.5 bg-surface-container-lowest/70 border border-outline-variant/25 rounded-lg">
+<span class="font-code-sm text-[10px] text-on-surface-variant uppercase tracking-wider">Sessions</span>
+<span class="font-code-md text-[14px] text-on-surface mt-1 font-semibold tracking-tight">597</span>
+</div>
+<div class="flex flex-col p-2.5 bg-surface-container-lowest/70 border border-outline-variant/25 rounded-lg">
+<span class="font-code-sm text-[10px] text-on-surface-variant uppercase tracking-wider">Keys In RAM</span>
+<span class="font-code-md text-[14px] text-primary mt-1 font-semibold tracking-tight">14</span>
+</div>
+<div class="flex flex-col p-2.5 bg-surface-container-lowest/70 border border-outline-variant/25 rounded-lg">
+<span class="font-code-sm text-[10px] text-on-surface-variant uppercase tracking-wider">Auth Age</span>
+<span class="font-code-md text-[14px] text-on-surface mt-1 font-semibold tracking-tight">42m</span>
+</div>
+</div>
+</div>
+<!-- Security & Encryption Enclave Section -->
+<div class="flex flex-col bg-surface-container-low border border-outline-variant/30 rounded-xl p-4 gap-3.5 shadow-sm">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2 text-on-surface">
+<span class="material-symbols-outlined text-primary text-[1.2rem]">verified_user</span>
+<span class="font-headline-sm text-[14px] font-semibold">Security &amp; Encryption</span>
+</div>
+<span class="font-code-sm text-[10px] px-2 py-0.5 rounded bg-surface-container-high border border-outline-variant/30 text-on-surface-variant font-medium">L3 Enclave</span>
+</div>
+<!-- Sleek Badges Treatment -->
+<div class="grid grid-cols-2 gap-2">
+<div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-container border border-outline-variant/25">
+<span class="material-symbols-outlined text-primary text-[1rem]">lock</span>
+<span class="font-code-sm text-[11px] text-on-surface font-medium">AES-256-GCM</span>
+</div>
+<div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-container border border-outline-variant/25">
+<span class="material-symbols-outlined text-tertiary text-[1rem]">tag</span>
+<span class="font-code-sm text-[11px] text-on-surface font-medium">PBKDF2-SHA512</span>
+</div>
+<div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-container border border-outline-variant/25">
+<span class="material-symbols-outlined text-secondary text-[1rem]">memory</span>
+<span class="font-code-sm text-[11px] text-on-surface font-medium">Unlocked in RAM</span>
+</div>
+<div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-container border border-outline-variant/25">
+<span class="material-symbols-outlined text-primary-container text-[1rem]">shield_lock</span>
+<span class="font-code-sm text-[11px] text-on-surface font-medium">Sealed Vault</span>
+</div>
+</div>
+<!-- Clean Informational Banner -->
+<div class="flex items-start gap-2.5 p-3 rounded-lg bg-surface-container-lowest/80 border border-outline-variant/20">
+<span class="material-symbols-outlined text-outline text-[1.125rem] mt-0.5 flex-shrink-0">info</span>
+<p class="font-body-sm text-[12px] leading-relaxed text-on-surface-variant">
+            Zero-knowledge client-side encryption. Master derivation keys reside solely in browser sandbox storage and are erased on process termination.
+          </p>
+</div>
+<!-- Entropy Allocation Bar: Minimal and Precise -->
+<div class="flex flex-col gap-1.5 p-3 bg-surface-container border border-outline-variant/20 rounded-lg">
+<div class="flex items-center justify-between font-code-sm text-[11px]">
+<span class="text-on-surface-variant">Entropy Allocation</span>
+<span class="text-primary font-medium">100% Isolated</span>
+</div>
+<div class="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary-container rounded-full w-full"></div>
+</div>
+</div>
+</div>
+<!-- Sync Network Section -->
+<div class="flex flex-col bg-surface-container-low border border-outline-variant/30 rounded-xl p-4 gap-3.5 shadow-sm">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2 text-on-surface">
+<span class="material-symbols-outlined text-primary text-[1.2rem]">sync_alt</span>
+<span class="font-headline-sm text-[14px] font-semibold">Sync Network</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span class="font-code-sm text-[10px] text-on-surface-variant uppercase tracking-wider">Peer Link</span>
+</div>
+</div>
+<!-- Daemon RPC Endpoint Card -->
+<div class="flex items-center justify-between p-3 bg-surface-container border border-outline-variant/25 rounded-lg">
+<div class="flex items-center gap-2.5 min-w-0">
+<div class="w-7 h-7 rounded bg-surface-container-high border border-outline-variant/30 flex items-center justify-center text-on-surface-variant flex-shrink-0">
+<span class="material-symbols-outlined text-[1rem]">lan</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-code-sm text-[10px] text-on-surface-variant uppercase tracking-wider">Active Daemon RPC</span>
+<span class="font-code-sm text-[12px] text-primary font-medium truncate">http://localhost:8080</span>
+</div>
+</div>
+<button aria-label="Configure RPC" class="w-8 h-8 rounded-lg bg-surface-container-high hover:bg-surface-bright border border-outline-variant/30 text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors flex-shrink-0" type="button">
+<span class="material-symbols-outlined text-[1rem]">tune</span>
+</button>
+</div>
+<!-- Topology & Replication Cards -->
+<div class="grid grid-cols-2 gap-2">
+<div class="flex items-center gap-2.5 p-3 bg-surface-container border border-outline-variant/25 rounded-lg">
+<div class="w-7 h-7 rounded bg-surface-container-high border border-outline-variant/30 flex items-center justify-center text-secondary flex-shrink-0">
+<span class="material-symbols-outlined text-[1rem]">devices</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-code-sm text-[10px] text-on-surface-variant uppercase tracking-wider">Topology</span>
+<span class="font-headline-sm text-[13px] text-on-surface font-semibold truncate">2 Active Nodes</span>
+</div>
+</div>
+<div class="flex items-center gap-2.5 p-3 bg-surface-container border border-outline-variant/25 rounded-lg">
+<div class="w-7 h-7 rounded bg-surface-container-high border border-outline-variant/30 flex items-center justify-center text-primary flex-shrink-0">
+<span class="material-symbols-outlined text-[1rem]">language</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-code-sm text-[10px] text-on-surface-variant uppercase tracking-wider">Replication</span>
+<span class="font-headline-sm text-[13px] text-on-surface font-semibold truncate">263 Domains</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Action Buttons with Proper Hierarchy -->
+<div class="flex flex-col gap-2.5 pt-1">
+<!-- Lock Vault Key: Solid / Sleek Primary Action -->
+<button class="w-full h-11 bg-surface-container-highest hover:bg-surface-bright border border-outline-variant/40 active:scale-[0.99] text-on-surface rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm group" id="lock-vault-trigger" type="button">
+<span class="material-symbols-outlined text-[1.125rem] text-primary transition-transform group-hover:scale-110">lock</span>
+<span class="font-headline-sm text-[13px] font-medium tracking-wide">Lock Vault Key</span>
+</button>
+<!-- Sign Out & Purge Session: Understated Destructive Outline -->
+<button class="w-full h-11 bg-transparent hover:bg-error-container/10 active:scale-[0.99] border border-error/30 hover:border-error/50 text-error rounded-xl flex items-center justify-center gap-2 transition-all" type="button">
+<span class="material-symbols-outlined text-[1.125rem]">logout</span>
+<span class="font-headline-sm text-[13px] font-medium tracking-wide">Sign Out &amp; Purge Session</span>
+</button>
+</div>
+<!-- Toast Notification Overlay for Copy Action -->
+<div class="fixed bottom-20 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-surface-container-highest text-primary border border-outline-variant/40 rounded-lg shadow-xl font-code-sm text-[11px] flex items-center gap-1.5 opacity-0 pointer-events-none transition-opacity duration-200 z-50" id="copy-toast">
+<span class="material-symbols-outlined text-[1rem] text-secondary">check_circle</span>
+<span>Fingerprint copied to clipboard</span>
+</div>
+</div>
+<script>
+      (function () {
+        const copyBtn = document.getElementById('copy-hash-btn');
+        const toast = document.getElementById('copy-toast');
+        const lockBtn = document.getElementById('lock-vault-trigger');
+
+        if (copyBtn && toast) {
+          copyBtn.addEventListener('click', function () {
+            navigator.clipboard?.writeText('6ad83ec6294bbb1b28d41b2c');
+            toast.classList.remove('opacity-0', 'pointer-events-none');
+            toast.classList.add('opacity-100');
+            setTimeout(() => {
+              toast.classList.remove('opacity-100');
+              toast.classList.add('opacity-0', 'pointer-events-none');
+            }, 1800);
+          });
+        }
+
+        if (lockBtn) {
+          lockBtn.addEventListener('click', function () {
+            const textSpan = lockBtn.querySelector('span:last-child');
+            const iconSpan = lockBtn.querySelector('.material-symbols-outlined');
+            if (textSpan && iconSpan) {
+              iconSpan.textContent = 'check';
+              textSpan.textContent = 'Vault Locked';
+              lockBtn.classList.add('bg-primary-container', 'text-on-primary-container', 'border-primary');
+              setTimeout(() => {
+                iconSpan.textContent = 'lock';
+                textSpan.textContent = 'Lock Vault Key';
+                lockBtn.classList.remove('bg-primary-container', 'text-on-primary-container', 'border-primary');
+              }, 1500);
+            }
+          });
+        }
+      })();
+    </script>
+</main>
+<!-- Bottom Navigation -->
+<nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface/90 backdrop-blur-xl border-t border-outline-variant/30">
+<div class="h-14 px-4 grid grid-cols-3 gap-1 items-center">
+<a class="flex flex-col items-center justify-center h-11 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all gap-0.5" data-path="vault-sessions" href="#">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[1.125rem]">dns</span>
+<span class="font-code-sm text-[10px] px-1 rounded bg-surface-container-high text-on-surface-variant">473</span>
+</div>
+<span class="font-label-sm text-[11px] font-medium">Vault</span>
+</a>
+<a class="flex flex-col items-center justify-center h-11 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all gap-0.5" data-path="connected-devices" href="#">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[1.125rem]">devices</span>
+<span class="font-code-sm text-[10px] px-1 rounded bg-surface-container-high text-secondary">2</span>
+</div>
+<span class="font-label-sm text-[11px] font-medium">Devices</span>
+</a>
+<a aria-current="page" class="flex flex-col items-center justify-center h-11 rounded-lg transition-all gap-0.5 text-primary bg-surface-container-high border border-outline-variant/30" data-path="security-logs" href="#">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[1.125rem]">terminal</span>
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container"></span>
+</div>
+<span class="font-label-sm text-[11px] font-medium">Security</span>
+</a>
+</div>
+</nav>
+</body></html>

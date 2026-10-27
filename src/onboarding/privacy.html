@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Switch — Privacy Policy</title>
+    <link rel="stylesheet" href="onboarding.css" />
+    <style>
+      .doc { max-width: 680px; }
+      .doc h2 { margin-top: 30px; }
+      .doc h2:first-of-type { margin-top: 0; }
+      .doc p, .doc li { color: #cdd3e0; }
+      .doc ul { padding-left: 20px; }
+      .doc li { margin-bottom: 7px; }
+      .updated { color: var(--muted); font-size: 13px; }
+      .back {
+        display: inline-block; margin-bottom: 20px; color: var(--accent);
+        text-decoration: none; font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap doc">
+      <a class="back" href="onboarding.html">← Back to setup</a>
+
+      <div class="brand">
+        <img src="../assets/icon-48.png" alt="Switch" class="logo" />
+        <div>
+          <h1>Switch</h1>
+          <p class="tag">Privacy Policy</p>
+        </div>
+      </div>
+      <p class="updated">Last updated: 1 October 2026</p>
+
+      <h2>The short version</h2>
+      <p>
+        Switch reads the login state of websites <strong>you explicitly
+        grant</strong>, encrypts it on your device, and never sends it anywhere
+        in a form we can read. We don't sell data, we don't run analytics on your
+        browsing, and we can't recover your sessions if you lose your password.
+      </p>
+
+      <h2>What Switch accesses</h2>
+      <ul>
+        <li>
+          <strong>Cookies</strong> — for sites you grant, read when you click
+          <em>Save this session</em> or <em>Restore</em>. Cookies are how a site
+          knows you're logged in.
+        </li>
+        <li>
+          <strong>localStorage and session tokens</strong> — for the same sites,
+          at the same moments. Many modern apps store their auth token here
+          instead of a cookie.
+        </li>
+      </ul>
+      <p>
+        Access is requested per site, through your browser's own permission
+        prompt. Switch does <strong>not</strong> request access to all websites
+        when installed, and does not read anything in the background.
+      </p>
+
+      <h2>What Switch never does</h2>
+      <ul>
+        <li>Never reads the passwords you type.</li>
+        <li>Never collects data from sites you haven't granted.</li>
+        <li>Never runs in the background watching your browsing.</li>
+        <li>Never sends your sessions, keys, or password to our servers.</li>
+        <li>Never sells or shares data with third parties.</li>
+      </ul>
+
+      <h2>How your data is protected</h2>
+      <p>
+        Sessions are encrypted with AES-256-GCM using a key derived from your
+        password (PBKDF2-SHA256, 310,000 iterations). The key is derived
+        separately for authentication and encryption, so a leaked login hash
+        can't be used to decrypt your sessions. The server stores only encrypted
+        blobs — it never holds your password or your encryption key. This is
+        zero-knowledge: we cannot read your sessions even if compelled to.
+      </p>
+
+      <h2>Where data is stored</h2>
+      <ul>
+        <li>
+          <strong>On your device</strong> — in the extension's local storage,
+          encrypted. This is the default, and works without an account.
+        </li>
+        <li>
+          <strong>On our server</strong> — only if you sign in to sync across
+          your own machines. Encrypted blobs only. You can delete them at any
+          time.
+        </li>
+      </ul>
+
+      <h2>Sharing with other people</h2>
+      <p>
+        If you choose to hand a session to a teammate, it's re-encrypted to their
+        public key before upload. Only they can open it. We can't.
+      </p>
+
+      <h2>Your control</h2>
+      <p>
+        You can withdraw consent and delete all saved sessions at any time from
+        the extension's settings. Withdrawing consent deletes every saved
+        session, revokes site access, and cannot be undone.
+      </p>
+
+      <h2>What Switch can't do</h2>
+      <p>
+        Some sites (banks, Google, streaming services) bind sessions to a device
+        or IP and will reject a session moved from another browser. Passkeys
+        cannot be exported by design. We tell you when a restore is rejected
+        rather than retrying silently.
+      </p>
+
+      <h2>Contact</h2>
+      <p>Questions about this policy: privacy@switch.example</p>
+    </main>
+  </body>
+</html>

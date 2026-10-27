@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Switch — The Zero-Knowledge Session Bridge for Modern Browsers</title>
+  <meta name="description" content="Instantly swap, sync, and bridge active login sessions between Chrome, Edge, Brave, and Firefox with AES-256-GCM zero-knowledge encryption." />
+  <link rel="icon" type="image/svg+xml" href="../src/assets/logo.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@350;450;550;650;750;850&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Precision Ambient Noise & Atmospheric Gradient Grid -->
+  <div class="canvas-ambient" aria-hidden="true">
+    <div class="grid-overlay"></div>
+    <div class="ambient-spot spot-cyan"></div>
+    <div class="ambient-spot spot-violet"></div>
+  </div>
+
+  <!-- Primary Header with Interactive Options Dropdown & Mobile Drawer -->
+  <header class="masthead">
+    <div class="container masthead-inner">
+      <a href="index.html" class="brand-entity">
+        <div class="brand-monogram">
+          <img src="../src/assets/icon-128.png" alt="Switch" class="brand-img" width="30" height="30" />
+        </div>
+        <span class="brand-wordmark">Switch</span>
+      </a>
+
+      <!-- Desktop Navigation Cluster -->
+      <nav class="navigation-cluster">
+        <a href="index.html" class="nav-anchor active">Home</a>
+        <a href="about.html" class="nav-anchor">About & How It Works</a>
+        <a href="download.html" class="nav-anchor">Download</a>
+
+        <a href="support.html" class="nav-anchor">Help & Support</a>
+        <a href="donate.html" class="nav-anchor">Donate</a>
+      </nav>
+
+      <!-- Masthead Action Buttons & Mobile Hamburger Toggle -->
+      <div class="masthead-action">
+        <a href="download.html" class="btn btn-primary btn-sm">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span>Download Free</span>
+        </a>
+
+        <button class="mobile-menu-toggle" id="mobileMenuToggle" type="button" aria-label="Toggle navigation options">
+          <span class="hamburger-bar"></span>
+          <span class="hamburger-bar"></span>
+          <span class="hamburger-bar"></span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile Drawer Overlay Menu -->
+    <div class="mobile-nav-drawer" id="mobileNavDrawer">
+      <div class="mobile-drawer-inner">
+        <!-- Primary Navigation List -->
+        <div class="mobile-nav-list">
+          <a href="index.html" class="mobile-nav-row active">
+            <span class="nav-row-icon icon-cyan">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            </span>
+            <div class="nav-row-meta">
+              <span class="nav-row-title">Home</span>
+              <span class="nav-row-sub">Overview &amp; live session bridge</span>
+            </div>
+            <svg class="nav-row-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+
+          <a href="about.html" class="mobile-nav-row">
+            <span class="nav-row-icon icon-purple">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </span>
+            <div class="nav-row-meta">
+              <span class="nav-row-title">About &amp; How It Works</span>
+              <span class="nav-row-sub">Zero-knowledge ECDH cryptography</span>
+            </div>
+            <svg class="nav-row-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+
+          <a href="download.html" class="mobile-nav-row">
+            <span class="nav-row-icon icon-emerald">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </span>
+            <div class="nav-row-meta">
+              <span class="nav-row-title">Download for Browsers</span>
+              <span class="nav-row-sub">Chrome, Firefox, Brave &amp; Edge</span>
+            </div>
+            <svg class="nav-row-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+
+          <a href="support.html" class="mobile-nav-row">
+            <span class="nav-row-icon icon-sky">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            </span>
+            <div class="nav-row-meta">
+              <span class="nav-row-title">Help &amp; Support</span>
+              <span class="nav-row-sub">Troubleshooting, FAQs &amp; guides</span>
+            </div>
+            <svg class="nav-row-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+
+          <a href="donate.html" class="mobile-nav-row">
+            <span class="nav-row-icon icon-rose">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+            </span>
+            <div class="nav-row-meta">
+              <span class="nav-row-title">Support Project</span>
+              <span class="nav-row-sub">Keep Switch free via UPI donation</span>
+            </div>
+            <span class="nav-row-badge">UPI</span>
+            <svg class="nav-row-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+        </div>
+
+        <!-- Quick Options Bar -->
+        <div class="mobile-options-heading">Quick Actions &amp; Tools</div>
+        <div class="mobile-tools-grid">
+          <a href="#demo" class="mobile-tool-card">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <span>Live Demo</span>
+          </a>
+          <a href="about.html#architecture" class="mobile-tool-card">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span>Crypto Spec</span>
+          </a>
+          <a href="support.html#feedback" class="mobile-tool-card">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>
+            <span>Feedback</span>
+          </a>
+          <a href="admin.html" class="mobile-tool-card">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            <span>Admin Ops</span>
+          </a>
+        </div>
+
+        <!-- Sleek Footer Strip -->
+        <div class="mobile-drawer-footer">
+          <div class="drawer-status-pill">
+            <span class="status-pulse-dot"></span>
+            <span>MV3 Live &amp; Verified • v1.0.4</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- HERO SECTION WITH ASYMMETRICAL EDITORIAL LAYOUT -->
+    <section class="hero-stage">
+      <div class="container hero-layout">
+        <!-- Left: Copy & Value Proposition -->
+        <div class="hero-content">
+
+          <h1 class="hero-headline">
+            Move active web logins <span class="gradient-text">between browsers</span> without re-authenticating.
+          </h1>
+
+          <p class="hero-dek">
+            Developers and multi-browser users waste hours daily logging in, solving 2FA challenges, and switching accounts. Switch securely bridges live, authenticated cookie envelopes across Chrome, Edge, Brave, and Firefox — sealed with your master password before touching the network.
+          </p>
+
+          <div class="hero-button-cluster">
+            <a href="#install" class="btn btn-primary btn-lg">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              <span>Get Switch for Chromium & Firefox</span>
+            </a>
+            <a href="#demo" class="btn btn-subtle btn-lg">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <polygon points="5 3 19 12 5 21 5 3"/>
+              </svg>
+              <span>Explore Interactive Demo</span>
+            </a>
+          </div>
+
+          <!-- Micro Spec Summary Bar -->
+          <div class="spec-summary-bar">
+            <div class="spec-entry">
+              <span class="spec-prop">Encryption</span>
+              <span class="spec-val">AES-256-GCM Zero-Knowledge</span>
+            </div>
+            <div class="spec-entry">
+              <span class="spec-prop">Server Access</span>
+              <span class="spec-val">Zero-Knowledge (Ciphertext Only)</span>
+            </div>
+            <div class="spec-entry">
+              <span class="spec-prop">Recovery</span>
+              <span class="spec-val">1-Click Local Cookie Rollback</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Live Active Tab Swapper Card Preview -->
+        <div class="hero-graphic-wrap">
+          <div class="device-mesh-graphic">
+            <div class="node-card node-source">
+              <div class="node-head">
+                <div class="browser-sprite-icon edge-icon"></div>
+                <div class="node-meta">
+                  <span class="node-name">Microsoft Edge</span>
+                  <span class="node-host">chatgpt.com</span>
+                </div>
+                <span class="status-badge live">Logged In</span>
+              </div>
+              <div class="token-strip">
+                <span class="token-chip">__Secure-next-auth.session-token</span>
+                <span class="token-count">+25 tokens</span>
+              </div>
+            </div>
+
+            <!-- Kinetic Transfer Line -->
+            <div class="transfer-chasm">
+              <div class="chasm-line"></div>
+              <div class="laser-carrier">
+                <span class="laser-packet"></span>
+              </div>
+              <div class="key-icon-center">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2.2">
+                  <path d="M16 3l4 4-4 4"/>
+                  <path d="M20 7H4"/>
+                  <path d="M8 21l-4-4 4-4"/>
+                  <path d="M4 17h16"/>
+                </svg>
+              </div>
+            </div>
+
+            <div class="node-card node-dest">
+              <div class="node-head">
+                <div class="browser-sprite-icon chrome-icon"></div>
+                <div class="node-meta">
+                  <span class="node-name">Google Chrome</span>
+                  <span class="node-host">chatgpt.com</span>
+                </div>
+                <span class="status-badge sync">Swappable</span>
+              </div>
+              <div class="toast-preview-pill">
+                <span class="pill-dot"></span>
+                <span>In-page toast prompts 1-click adoption</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LIVE INTERACTIVE SIMULATOR (Ground Truth Demonstration) -->
+    <section id="demo" class="simulator-stage">
+      <div class="container">
+        <div class="section-lead">
+          <h2 class="section-title">The In-Page Experience</h2>
+          <p class="section-p">
+            When you navigate to a website on one browser, Switch checks if an authenticated session exists on any other connected computer or profile. If found, a non-intrusive floating toast appears with dual rotating border laser beams.
+          </p>
+        </div>
+
+        <div class="browser-viewport-frame">
+          <!-- Window Title Bar -->
+          <div class="window-titlebar">
+            <div class="window-controls">
+              <span class="control-pip"></span>
+              <span class="control-pip"></span>
+              <span class="control-pip"></span>
+            </div>
+            <div class="url-omnibox">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span class="domain-text">https://chatgpt.com<span class="domain-cursor"></span></span>
+              <span class="tab-token-flag">26 Local Cookies Available</span>
+            </div>
+            <div class="window-ext-actions">
+              <div class="action-pip-ext" title="Switch Extension Active">
+                <span class="beacon-pip"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Web Content Area -->
+          <div class="rendered-canvas">
+            <!-- Simulated ChatGPT Web Content -->
+            <div class="chatgpt-canvas">
+              <aside class="mock-nav">
+                <div class="nav-placeholder w-75"></div>
+                <div class="nav-placeholder w-55"></div>
+                <div class="nav-placeholder w-65"></div>
+                <div class="nav-placeholder w-40"></div>
+                <div class="nav-divider"></div>
+                <div class="nav-placeholder w-80"></div>
+                <div class="nav-placeholder w-50"></div>
+              </aside>
+
+              <div class="mock-stage">
+                <div class="mock-greeting">ChatGPT</div>
+                <div class="mock-subtitle">What will we work on today?</div>
+                <div class="mock-input-field">
+                  <span>Message ChatGPT...</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- THE ACTUAL SWITCH IN-PAGE FLOATING TOAST -->
+            <div class="switch-toast-wrapper" id="toastWrapper">
+              <div class="switch-toast-card">
+                <!-- Dual Rotating Beams (Real product implementation) -->
+                <div class="toast-beam-1"></div>
+                <div class="toast-beam-2"></div>
+
+                <div class="switch-toast-inner">
+                  <div class="toast-header-row">
+                    <div class="browser-avatar-frame">
+                      <div class="browser-sprite-icon chrome-icon-sm"></div>
+                      <span class="avatar-active-pulse"></span>
+                    </div>
+
+                    <div class="toast-meta-col">
+                      <div class="badge-cluster">
+                        <span class="badge-domain">chatgpt.com</span>
+                        <span class="badge-device">From Chrome 155 · Windows</span>
+                      </div>
+                      <h4 class="toast-card-title" id="demoToastTitle">Swap Session Available</h4>
+                    </div>
+
+                    <button class="toast-close-x" id="btnDismissDemo" title="Dismiss">✕</button>
+                  </div>
+
+                  <p class="toast-body-text" id="demoToastBody">
+                    Active session available from <strong>Chrome 155 · Windows 10/11</strong> (17 tokens).
+                  </p>
+
+                  <div class="toast-action-row">
+                    <button class="btn-toast-primary" id="btnTriggerSwap">
+                      <svg class="swap-icon-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M16 3l4 4-4 4"/>
+                        <path d="M20 7H4"/>
+                        <path d="M8 21l-4-4 4-4"/>
+                        <path d="M4 17h16"/>
+                      </svg>
+                      <span id="btnSwapText">Swap Session</span>
+                    </button>
+                    <button class="btn-toast-ghost" id="btnNotNowDemo">Not now</button>
+                  </div>
+
+                  <div class="toast-footer-bar">
+                    <span class="footer-brand">Switch</span>
+                    <span class="footer-enc"><span class="enc-dot"></span> Zero-knowledge encrypted</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- HOLOGRAPHIC SESSION KEY SWAP ANIMATION MODAL -->
+            <div class="holographic-anim-stage" id="animStage">
+              <div class="holographic-window">
+                <h3 class="holo-title" id="holoTitle">Switching Session Keys</h3>
+                <div class="holo-subtitle">Target Domain: <strong>chatgpt.com</strong> • Zero-Knowledge Vault</div>
+
+                <div class="holo-flow-chasm">
+                  <!-- Left: Old Session Key -->
+                  <div class="session-key-slab slab-old" id="slabOld">
+                    <div class="slab-header slab-red">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                      </svg>
+                      <span>Old Session Key</span>
+                    </div>
+                    <div class="slab-micro-dots">
+                      <span></span><span></span><span></span><span></span><span></span>
+                    </div>
+                  </div>
+
+                  <!-- Center: Fiber Optic Conduit Rays -->
+                  <div class="fiber-optic-bridge">
+                    <svg class="bridge-rays-svg" viewBox="0 0 180 80">
+                      <defs>
+                        <linearGradient id="fiberGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%" stop-color="#f43f5e"/>
+                          <stop offset="50%" stop-color="#38bdf8"/>
+                          <stop offset="100%" stop-color="#34d399"/>
+                        </linearGradient>
+                      </defs>
+                      <path class="ray ray-cyan" d="M 0 20 C 50 20, 40 60, 90 40 C 140 20, 130 60, 180 60" />
+                      <path class="ray ray-violet" d="M 0 40 C 60 40, 50 20, 90 40 C 130 60, 120 20, 180 20" />
+                      <path class="ray ray-blue" d="M 0 60 C 40 60, 60 20, 90 40 C 120 60, 140 20, 180 40" />
+                    </svg>
+                  </div>
+
+                  <!-- Right: Encrypted New Key Docking -->
+                  <div class="session-key-slab slab-new" id="slabNew">
+                    <div class="gold-connector-pins">
+                      <span></span><span></span><span></span><span></span>
+                    </div>
+                    <div class="slab-header slab-cyan">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                      </svg>
+                      <span>Encrypted Session Key</span>
+                    </div>
+                    <div class="pcb-socket-graphic">
+                      <div class="socket-chip"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Status Badges -->
+                <div class="holo-status-enclosure">
+                  <div class="status-column">
+                    <span class="status-pip pip-red">✓</span>
+                    <div class="status-copy">
+                      <strong>Old Session Saved</strong>
+                      <span>Locally backed up for rollback</span>
+                    </div>
+                  </div>
+                  <div class="status-column">
+                    <span class="status-pip pip-purp">⚡</span>
+                    <div class="status-copy">
+                      <strong>Transfer Conduit</strong>
+                      <span>AES-256 encrypted byte payload</span>
+                    </div>
+                  </div>
+                  <div class="status-column">
+                    <span class="status-pip pip-green">🔒</span>
+                    <div class="status-copy">
+                      <strong>New Key Locked</strong>
+                      <span>Fresh credentials authenticated</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 CORE ARCHITECTURAL PILLARS (Preview Teaser) -->
+    <section class="architecture-stage">
+      <div class="container">
+        <div class="section-lead text-center" style="margin: 0 auto 30px;">
+          <h2 class="section-title">Engineered at the <span class="gradient-text">Session Layer</span></h2>
+          <p class="section-p">
+            Password managers stop at the login form. Switch moves active authenticated states directly between browsers.
+          </p>
+        </div>
+
+        <div class="pillar-grid">
+          <div class="pillar-card">
+            <div>
+              <span class="pillar-num">01 / SESSION CONTINUITY</span>
+              <h3>Bypass Repetitive 2FA Challenges</h3>
+              <p>Authenticate once on your primary workstation. Switch securely mirrors live sessions so you never reach for security keys or phones when changing browsers.</p>
+            </div>
+          </div>
+
+          <div class="pillar-card">
+            <div>
+              <span class="pillar-num">02 / ZERO KNOWLEDGE</span>
+              <h3>Client-Sealed AES-256 Vault</h3>
+              <p>Keys are derived via PBKDF2 (100,000 iterations) directly in your browser. Encrypted ciphertexts mean sync servers can never inspect your cookies.</p>
+            </div>
+          </div>
+
+          <div class="pillar-card">
+            <div>
+              <span class="pillar-num">03 / INSTANT ROLLBACK</span>
+              <h3>Automatic Snapshot Backups</h3>
+              <p>Switch automatically snapshots your current tab's cookies before any incoming injection, letting you revert to previous sessions with 1 click.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-center" style="margin-top: 36px;">
+          <a href="about.html" class="btn btn-subtle btn-lg">
+            <span>Explore Complete Architecture & How It Works &rarr;</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- BROWSER FLEET COMPATIBILITY RIBBON -->
+    <section class="browsers-stage" style="padding: 40px 0 60px;">
+      <div class="container text-center">
+        <h2 class="section-title">Deploy Across Your <span class="gradient-text">Entire Toolchain</span></h2>
+        <p class="section-p">Seamless cross-profile session sync across Chromium & Gecko.</p>
+
+        <div class="fleet-row" style="margin-top: 28px;">
+          <a href="download.html" class="fleet-card" style="text-decoration: none;">
+            <div class="fleet-icon">
+              <span class="browser-sprite-icon-lg chrome-pos"></span>
+            </div>
+            <h4>Google Chrome</h4>
+            <span class="fleet-detail">Manifest V3</span>
+          </a>
+
+          <a href="download.html" class="fleet-card" style="text-decoration: none;">
+            <div class="fleet-icon">
+              <span class="browser-sprite-icon-lg edge-pos"></span>
+            </div>
+            <h4>Microsoft Edge</h4>
+            <span class="fleet-detail">Edge Add-ons</span>
+          </a>
+
+          <a href="download.html" class="fleet-card" style="text-decoration: none;">
+            <div class="fleet-icon">
+              <span class="browser-sprite-icon-lg brave-pos"></span>
+            </div>
+            <h4>Brave Browser</h4>
+            <span class="fleet-detail">Chromium Native</span>
+          </a>
+
+          <a href="download.html" class="fleet-card" style="text-decoration: none;">
+            <div class="fleet-icon">
+              <span class="browser-sprite-icon-lg firefox-pos"></span>
+            </div>
+            <h4>Mozilla Firefox</h4>
+            <span class="fleet-detail">Gecko / AMO</span>
+          </a>
+
+          <a href="download.html" class="fleet-card" style="text-decoration: none;">
+            <div class="fleet-icon">
+              <span class="browser-sprite-icon-lg arc-pos"></span>
+            </div>
+            <h4>Arc & Vivaldi</h4>
+            <span class="fleet-detail">Chromium Native</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- HIGH-IMPACT CLOSING CALL TO ACTION -->
+    <section class="container" style="padding-bottom: 80px;">
+      <div class="home-cta-card">
+        <div>
+          <div class="subpage-badge" style="margin-bottom: 10px;">Get Started in Seconds</div>
+          <h2 style="font-size: 28px; font-weight: 750; color: #ffffff; margin-bottom: 8px;">
+            Ready to bridge your active browser logins?
+          </h2>
+          <p style="font-size: 15px; color: var(--text-medium); max-width: 50ch;">
+            Download the official extension, read the technical architecture, or reach our developer support desk anytime.
+          </p>
+        </div>
+
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+          <a href="download.html" class="btn btn-primary btn-lg">
+            <span>Download Switch Free</span>
+          </a>
+          <a href="support.html" class="btn btn-subtle btn-lg">
+            <span>Help & Support</span>
+          </a>
+          <a href="donate.html" class="btn btn-subtle btn-lg">
+            <span>Donate via UPI</span>
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ENHANCED MULTI-COLUMN EDITORIAL FOOTER -->
+  <footer class="colophon">
+    <div class="container colophon-mega-grid">
+      <!-- Col 1: Brand & Security Mission -->
+      <div class="colophon-col colophon-brand-col">
+        <div class="colophon-brand-header">
+          <div class="brand-monogram" style="width: 28px; height: 28px;">
+            <img src="../src/assets/icon-48.png" alt="Switch" width="20" height="20" />
+          </div>
+          <span class="colophon-logo">Switch</span>
+        </div>
+        <p class="colophon-mission">
+          The zero-knowledge session bridge for modern multi-browser users. Move authenticated web logins between Chrome, Edge, Brave, and Firefox securely.
+        </p>
+        <div class="colophon-status-pill">
+          <span class="status-dot"></span>
+          <span>Zero Telemetry • Client Vault Active</span>
+        </div>
+      </div>
+
+      <!-- Col 2: Supported Fleet & Downloads -->
+      <div class="colophon-col">
+        <h4 class="colophon-col-title">Download Stores</h4>
+        <ul class="colophon-link-list">
+          <li><a href="download.html" class="colophon-link">Google Chrome Store</a></li>
+          <li><a href="download.html" class="colophon-link">Microsoft Edge Add-ons</a></li>
+          <li><a href="download.html" class="colophon-link">Brave Browser (Chromium)</a></li>
+          <li><a href="download.html" class="colophon-link">Mozilla Firefox (AMO)</a></li>
+          <li><a href="download.html" class="colophon-link">Arc & Vivaldi</a></li>
+        </ul>
+      </div>
+
+      <!-- Col 3: Architecture & Security -->
+      <div class="colophon-col">
+        <h4 class="colophon-col-title">Architecture & Security</h4>
+        <ul class="colophon-link-list">
+          <li><a href="about.html" class="colophon-link">How Switch Works</a></li>
+          <li><a href="about.html" class="colophon-link">Cookie Envelope Protocol</a></li>
+          <li><a href="about.html" class="colophon-link">AES-256-GCM Zero-Knowledge Vault</a></li>
+          <li><a href="about.html" class="colophon-link">Anti-Replay Protection</a></li>
+          <li><a href="about.html" class="colophon-link">Zero-Knowledge Privacy Oath</a></li>
+        </ul>
+      </div>
+
+      <!-- Col 4: Help, Support & Docs -->
+      <div class="colophon-col">
+        <h4 class="colophon-col-title">Help & Support</h4>
+        <ul class="colophon-link-list">
+          <li><a href="support.html#feedback" class="colophon-link">Share Feedback (Bug / Idea)</a></li>
+          <li><a href="support.html" class="colophon-link">Help & Documentation</a></li>
+          <li><a href="admin.html" class="colophon-link">Admin Workstation</a></li>
+          <li><a href="support.html#faq" class="colophon-link">Frequently Asked Questions</a></li>
+          <li><a href="support.html#troubleshoot" class="colophon-link">Troubleshooting Checklist</a></li>
+          <li><a href="mailto:anigokala3@gmail.com" class="colophon-link">Email Maintainer</a></li>
+          <li><a href="#demo" class="colophon-link">Live Session Simulator</a></li>
+        </ul>
+      </div>
+
+      <!-- Col 5: Open Source & Donation -->
+      <div class="colophon-col">
+        <h4 class="colophon-col-title">Donate & Community</h4>
+        <ul class="colophon-link-list">
+          <li><a href="donate.html" class="colophon-link">Donate via UPI</a></li>
+          <li><a href="donate.html" class="colophon-link">VPA: anigokala3@oksbi</a></li>
+          <li><a href="donate.html#qr" class="colophon-link">Scan UPI QR Code</a></li>
+          <li><a href="donate.html" class="colophon-link">GPay • PhonePe • Paytm • BHIM</a></li>
+          <li><a href="about.html" class="colophon-link">Manifest V3 Open Specification</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Sub-Colophon Bottom Legal Bar -->
+    <div class="container colophon-bottom">
+      <div class="colophon-legal-text">
+        <span>© 2026 Switch Project. Released under MIT License. No tracking cookies, no server-side telemetry.</span>
+      </div>
+      <div class="colophon-bottom-links">
+        <a href="about.html" class="colophon-bottom-link">Privacy Oath</a>
+        <span class="bullet-sep">•</span>
+        <a href="support.html" class="colophon-bottom-link">Support Desk</a>
+        <span class="bullet-sep">•</span>
+        <a href="admin.html" class="colophon-bottom-link">Admin Panel</a>
+        <span class="bullet-sep">•</span>
+        <a href="mailto:anigokala3@gmail.com" class="colophon-bottom-link">anigokala3@gmail.com</a>
+        <button class="back-to-top-btn" id="backToTopBtn" type="button" title="Back to top">
+          <span>Top</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="18 15 12 9 6 15"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

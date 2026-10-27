@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Switch — Admin Console [Retro Workstation]</title>
+  <meta name="description" content="Switch administrative console with retro white-grey workstation theme. Manage user feedback, devices, and session telemetry." />
+  <link rel="icon" type="image/svg+xml" href="../src/assets/logo.svg" />
+  <link rel="stylesheet" href="admin.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Top Retro Workstation Menu Bar -->
+  <header class="retro-menu-bar">
+    <div class="menu-brand-cluster">
+      <span class="retro-apple-icon" aria-hidden="true">🖥️</span>
+      <span class="menu-brand-title">Switch Core Console v2.4</span>
+      <nav class="menu-nav-links">
+        <a href="index.html" class="menu-item-link">← Website</a>
+        <a href="support.html" class="menu-item-link">Support Desk</a>
+        <a href="support.html#feedback" class="menu-item-link">User Feedback Form</a>
+      </nav>
+    </div>
+
+    <div class="menu-telemetry-cluster">
+      <div class="led-indicator" title="Server API Status">
+        <span class="led-bulb led-green"></span>
+        <span>SYS_NOMINAL</span>
+      </div>
+      <div class="led-indicator" title="MongoDB Connection">
+        <span class="led-bulb led-amber"></span>
+        <span id="dbStatusLabel">DB_CONNECTED</span>
+      </div>
+      <div class="retro-clock" id="systemClock">00:00:00</div>
+    </div>
+  </header>
+
+  <!-- Main Workstation Window Frame -->
+  <main class="retro-container">
+    <section class="retro-window">
+      <!-- Window Title Bar -->
+      <div class="retro-window-header">
+        <div class="window-title-group">
+          <div class="pinstripe-texture" aria-hidden="true"></div>
+          <span class="window-title-text">Workstation: /sys/switch/admin/control.panel</span>
+        </div>
+        <div class="window-controls-retro">
+          <button type="button" class="window-btn-square" id="winBtnMinimize" title="Minimize / Toggle System Specs Banner">_</button>
+          <button type="button" class="window-btn-square" id="winBtnMaximize" title="Toggle Fullscreen Display">□</button>
+          <button type="button" class="window-btn-square" id="winBtnClose" title="Exit to Website">✕</button>
+        </div>
+      </div>
+
+      <!-- ASCII Banner & Machine Telemetry -->
+      <div class="retro-ascii-card">
+        <div class="system-mission-box">
+          <h1 class="system-mission-title">SWITCH // ZERO-KNOWLEDGE ADMINISTRATIVE CONSOLE</h1>
+          <p class="system-mission-desc">
+            Administrative monitoring for cross-browser encrypted session envelopes, device check-ins, and incoming bug reports, improvements & community suggestions.
+          </p>
+          <div class="system-specs-strip">
+            <span class="spec-badge">NODE: <strong id="specNodeVersion">v22.x</strong></span>
+            <span class="spec-badge">PLATFORM: <strong id="specPlatform">win32 x64</strong></span>
+            <span class="spec-badge">UPTIME: <strong id="specUptime">0h 0m</strong></span>
+            <span class="spec-badge">MEMORY: <strong id="specMemory">0 MB</strong></span>
+            <span class="spec-badge">CIPHER: <strong>AES-256-GCM / PBKDF2</strong></span>
+          </div>
+        </div>
+
+        <pre class="ascii-art-block" aria-hidden="true">
+  _____         _ _       _     
+ /  ___|       (_) |     | |    
+ \ `--. _ _ _ _ _| |_ ___| |__  
+  `--. \ | | | | | __/ __| '_ \ 
+ /\__/ / | | | | | || (__| | | |
+ \____/ \__,_|_|_|\__\___|_| |_|
+ [ RETRO WORKSTATION TERMINAL ]</pre>
+      </div>
+
+      <!-- Retro Metrics Gauges Row -->
+      <div class="retro-metrics-grid">
+        <!-- Metric 1: Users -->
+        <div class="metric-gauge-card">
+          <div class="gauge-header-row">
+            <span class="gauge-label">Total Users</span>
+            <span class="gauge-sub-pill">Accounts</span>
+          </div>
+          <div class="gauge-display-value" id="gaugeUsersCount">--</div>
+          <div class="gauge-footer-note">
+            <span>Registered:</span> <strong id="gaugeUsersRecent">0 new</strong>
+          </div>
+        </div>
+
+        <!-- Metric 2: Sessions -->
+        <div class="metric-gauge-card">
+          <div class="gauge-header-row">
+            <span class="gauge-label">Active Sessions</span>
+            <span class="gauge-sub-pill">Envelopes</span>
+          </div>
+          <div class="gauge-display-value" id="gaugeSessionsCount">--</div>
+          <div class="gauge-footer-note">
+            <span>Encrypted at rest</span>
+          </div>
+        </div>
+
+        <!-- Metric 3: Devices -->
+        <div class="metric-gauge-card">
+          <div class="gauge-header-row">
+            <span class="gauge-label">Connected Devices</span>
+            <span class="gauge-sub-pill">Fleet</span>
+          </div>
+          <div class="gauge-display-value" id="gaugeDevicesCount">--</div>
+          <div class="gauge-footer-note">
+            <span>Chrome • Edge • Firefox</span>
+          </div>
+        </div>
+
+        <!-- Metric 4: Feedback -->
+        <div class="metric-gauge-card">
+          <div class="gauge-header-row">
+            <span class="gauge-label">Feedback Inbox</span>
+            <span class="gauge-sub-pill">Submissions</span>
+          </div>
+          <div class="gauge-display-value" id="gaugeFeedbackCount">--</div>
+          <div class="gauge-footer-note">
+            <span id="gaugeFeedbackBreakdown">0 bugs • 0 ideas</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Retro Folder Tab Navigation -->
+      <div class="retro-tabs-bar" role="tablist">
+        <button type="button" class="retro-tab-btn active" data-tab="feedback" role="tab" aria-selected="true">
+          <span>💬 Feedback Inbox</span>
+          <span class="tab-count-pill" id="tabBadgeFeedback">0</span>
+        </button>
+        <button type="button" class="retro-tab-btn" data-tab="users" role="tab" aria-selected="false">
+          <span>👤 Users Directory</span>
+          <span class="tab-count-pill" id="tabBadgeUsers">0</span>
+        </button>
+        <button type="button" class="retro-tab-btn" data-tab="devices" role="tab" aria-selected="false">
+          <span>💻 Connected Devices</span>
+          <span class="tab-count-pill" id="tabBadgeDevices">0</span>
+        </button>
+        <button type="button" class="retro-tab-btn" data-tab="terminal" role="tab" aria-selected="false">
+          <span>⚙️ System Logs & Tools</span>
+        </button>
+      </div>
+
+      <!-- TAB 1: FEEDBACK INBOX (Bug, Improvement, Suggestion Management) -->
+      <div class="retro-tab-pane" id="tabPaneFeedback" role="tabpanel">
+        <!-- Toolbar Strip -->
+        <div class="retro-toolbar-row">
+          <div class="retro-filter-group">
+            <button type="button" class="retro-filter-pill active" data-filter="all">All Feedback</button>
+            <button type="button" class="retro-filter-pill" data-filter="bug">🐞 Bugs (<span id="countPillBug">0</span>)</button>
+            <button type="button" class="retro-filter-pill" data-filter="improvement">🚀 Improvements (<span id="countPillImprovement">0</span>)</button>
+            <button type="button" class="retro-filter-pill" data-filter="suggestion">💡 Suggestions (<span id="countPillSuggestion">0</span>)</button>
+          </div>
+
+          <div class="retro-search-wrap">
+            <input type="text" id="feedbackSearchInput" class="retro-input-text" placeholder="Search description, email, or type..." />
+            <button type="button" id="refreshFeedbackBtn" class="retro-btn">
+              <span>⟳ Refresh</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Table of Feedback -->
+        <div class="retro-table-container">
+          <table class="retro-table">
+            <thead>
+              <tr>
+                <th style="width: 130px;">Type</th>
+                <th>Feedback Description</th>
+                <th style="width: 180px;">Submitter</th>
+                <th style="width: 140px;">Timestamp</th>
+                <th style="width: 100px;">Status</th>
+                <th style="width: 130px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="feedbackTableBody">
+              <tr>
+                <td colspan="6" class="table-empty-row">Loading feedback items from vault database...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB 2: USERS DIRECTORY -->
+      <div class="retro-tab-pane hidden" id="tabPaneUsers" role="tabpanel">
+        <div class="retro-toolbar-row">
+          <div class="retro-filter-group">
+            <span class="gauge-label">Registered Accounts Registry</span>
+          </div>
+          <div class="retro-search-wrap">
+            <input type="text" id="userSearchInput" class="retro-input-text" placeholder="Filter by email or user ID..." />
+            <button type="button" id="refreshUsersBtn" class="retro-btn">
+              <span>⟳ Refresh</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="retro-table-container">
+          <table class="retro-table">
+            <thead>
+              <tr>
+                <th style="width: 220px;">User ID</th>
+                <th>Account Email</th>
+                <th style="width: 170px;">Public Key Status</th>
+                <th style="width: 180px;">Registered Date</th>
+              </tr>
+            </thead>
+            <tbody id="usersTableBody">
+              <tr>
+                <td colspan="4" class="table-empty-row">Loading user records...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB 3: CONNECTED DEVICES -->
+      <div class="retro-tab-pane hidden" id="tabPaneDevices" role="tabpanel">
+        <div class="retro-toolbar-row">
+          <div class="retro-filter-group">
+            <span class="gauge-label">Active Browser Fleet</span>
+          </div>
+          <div class="retro-search-wrap">
+            <input type="text" id="deviceSearchInput" class="retro-input-text" placeholder="Filter devices or browsers..." />
+            <button type="button" id="refreshDevicesBtn" class="retro-btn">
+              <span>⟳ Refresh</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="retro-table-container">
+          <table class="retro-table">
+            <thead>
+              <tr>
+                <th style="width: 200px;">Device ID</th>
+                <th>Device Name</th>
+                <th style="width: 160px;">System Fingerprint</th>
+                <th style="width: 180px;">Last Active</th>
+              </tr>
+            </thead>
+            <tbody id="devicesTableBody">
+              <tr>
+                <td colspan="4" class="table-empty-row">Loading active devices...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB 4: SYSTEM LOGS & DIAGNOSTICS -->
+      <div class="retro-tab-pane hidden" id="tabPaneTerminal" role="tabpanel">
+        <div class="retro-toolbar-row">
+          <div class="retro-filter-group">
+            <button type="button" id="pingServerBtn" class="retro-btn">
+              <span>⚡ Execute Ping</span>
+            </button>
+            <button type="button" id="exportAuditBtn" class="retro-btn">
+              <span>📥 Export JSON Audit</span>
+            </button>
+            <button type="button" id="clearLogBtn" class="retro-btn">
+              <span>✕ Clear Console</span>
+            </button>
+          </div>
+          <span class="gauge-sub-pill" id="terminalStatusPill">CONSOLE_STREAM: ACTIVE</span>
+        </div>
+
+        <!-- CRT Terminal Console -->
+        <div class="retro-terminal-window" id="retroTerminalConsole" aria-live="polite">
+          <!-- Terminal log lines injected via JS -->
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Workstation Bottom Status Strip -->
+  <footer class="retro-status-strip">
+    <div class="status-left-details">
+      <span class="status-segment">STATUS: <strong>OPERATIONAL</strong></span>
+      <span class="status-segment">PORT: <strong>8080</strong></span>
+      <span class="status-segment">STORE: <strong>MongoDB</strong></span>
+      <span class="status-segment">TELEMETRY: <strong>ZERO-KNOWLEDGE</strong></span>
+    </div>
+    <div class="status-right-links">
+      <a href="index.html" class="status-link">Switch Homepage</a>
+      <span>•</span>
+      <a href="support.html" class="status-link">Help & Support</a>
+      <span>•</span>
+      <a href="donate.html" class="status-link">Donate via UPI</a>
+    </div>
+  </footer>
+
+  <script src="admin.js"></script>
+</body>
+</html>
