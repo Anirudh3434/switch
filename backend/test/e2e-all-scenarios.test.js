@@ -22,6 +22,7 @@ process.env.TOKEN_SECRET = 'e2e-super-secure-test-token-secret-256';
 process.env.REFRESH_PEPPER = 'e2e-test-refresh-pepper';
 process.env.DUMMY_SALT_SECRET = 'e2e-test-dummy-salt';
 process.env.ALLOWED_ORIGINS = 'chrome-extension://test-extension-id';
+process.env.ALLOW_UNVERIFIED_REGISTRATION = 'true';
 
 const { connect, close, users, sessions, refresh, shares } = await import('../src/db.js');
 const { buildApp } = await import('../src/server.js');
@@ -32,11 +33,13 @@ let base;
 let mongoUp = false;
 
 // WebCrypto-compatible AES-256-GCM and PBKDF2 helpers matching src/lib/crypto.js
-const KDF_ITERS = 60000;
+const KDF_ITERS = 600000;
 
 function deriveAuthHash(password, salt) {
-  const enc = Buffer.from(salt, 'base64url');
-  return pbkdf2Sync(password, enc, KDF_ITERS, 32, 'sha256').toString('base64url');
+  // The real client uses the UTF-8 string `salt + "auth"`, not the decoded
+  // salt bytes. Getting this wrong makes the test pass against itself while
+  // failing against production.
+  return pbkdf2Sync(password, salt + 'auth', KDF_ITERS, 32, 'sha256').toString('base64url');
 }
 
 function deriveVaultKey(password, salt) {
@@ -75,8 +78,13 @@ before(async () => {
     await connect();
     mongoUp = true;
   } catch (e) {
-    console.error(`E2E Skipped: MongoDB unreachable (${e.message})`);
-    return;
+    if (process.env.ALLOW_DB_TEST_SKIP === '1') {
+      console.error(`E2E skipped: MongoDB unreachable (${e.message})`);
+      return;
+    }
+    throw new Error(
+      `MongoDB unreachable (${e.message}). Start MongoDB or set ALLOW_DB_TEST_SKIP=1 to skip DB tests.`,
+    );
   }
   server = createServer(buildApp());
   await new Promise((r) => server.listen(0, r));
@@ -148,9 +156,10 @@ test('SCENARIO 1: User Registration, Prelogin, Login, Token Refresh & Logout', a
   assert.ok(refreshRes.data.refreshToken);
   assert.notEqual(refreshRes.data.refreshToken, refreshToken, 'Refresh token rotated');
 
-  // 6. Old refresh token reuse is rejected
+  // 6. Old refresh token reuse is rejected (409 means a concurrent refresh
+  // won the race; 401 means replay after the grace window).
   const replayRes = await req('POST', '/v1/auth/refresh', { refreshToken });
-  assert.equal(replayRes.status, 401, 'Reused refresh token rejected');
+  assert.ok([401, 409].includes(replayRes.status), 'Reused refresh token rejected');
 
   // 7. Logout revokes active tokens
   const logoutRes = await req('POST', '/v1/auth/logout', { refreshToken: refreshRes.data.refreshToken }, refreshRes.data.accessToken);
@@ -383,9 +392,12 @@ test('SCENARIO 5: Website Logout automatically deletes stale session from cloud 
   assert.equal(deleteRes.status, 200);
   assert.equal(deleteRes.data.deletedCount, 1);
 
-  // 3. Cloud DB verification: Stale session is completely erased
+  // 3. Cloud DB verification: the session is tombstoned, not physically
+  // removed. Other devices must see the deletion on their next pull.
   sessionInDb = await sessions().findOne({ host: 'netflix.com' });
-  assert.equal(sessionInDb, null, 'Stale session removed from cloud DB after website logout');
+  assert.ok(sessionInDb, 'row is retained as a tombstone');
+  assert.equal(sessionInDb.deleted, true, 'stale session marked deleted');
+  assert.equal(sessionInDb.envelope, null, 'tombstone carries no payload');
 });
 
 // ============================================================================

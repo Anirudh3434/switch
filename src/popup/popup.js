@@ -6,12 +6,14 @@ import {
   isAuthToken,
   login,
   getServerUrl,
+  setServerUrl,
 } from '../lib/auth.js';
 import {
   getBrowserLogoSvg,
   getBrowserSpriteHtml,
   getBrowserSpriteClass,
 } from '../lib/browser-icons.js';
+import { getRegistrableDomain, hostMatches } from '../lib/domain.js';
 
 const CH = chrome;
 
@@ -54,6 +56,7 @@ let currentDeviceId = null;
 let currentSystemId = null;
 let currentDeviceInfo = null;
 let userDevices = [];
+let allDevices = [];
 let remoteSessions = [];
 let activeSwaps = {}; // map of rootDomain -> SwapRecord
 const syncedDeviceIds = new Set();
@@ -62,6 +65,25 @@ const syncedDeviceIds = new Set();
 let currentTheme = 'dark';
 
 const send = (msg) => CH.runtime.sendMessage(msg);
+
+/**
+ * Ask for host access while we still have the click's user gesture.
+ * Dynamic content scripts cannot be registered for an origin we do not have
+ * permission for, and Chrome requires the request to be user-initiated.
+ */
+async function ensureHostAccess(host) {
+  const clean = String(host || '').replace(/^\.+/, '').toLowerCase().trim();
+  if (!clean) return false;
+  try {
+    const origins = [`*://*.${clean}/*`];
+    const already = await CH.permissions.contains({ origins });
+    if (already) return true;
+    return await CH.permissions.request({ origins });
+  } catch (e) {
+    console.warn('[switch] host permission request failed:', e?.message || e);
+    return false;
+  }
+}
 
 function applyTheme(theme) {
   currentTheme = theme;
@@ -169,15 +191,29 @@ function cleanDomain(d) {
 
 function getRootDomain(domain) {
   if (!domain || domain === 'host-only') return '';
-  const clean = cleanDomain(domain);
-  const parts = clean.split('.');
-  if (parts.length <= 2) return clean;
-  return parts.slice(-2).join('.');
+  return getRegistrableDomain(cleanDomain(domain));
 }
 
+/**
+ * Local, deterministic favicon placeholder.
+ *
+ * We deliberately do not call a third-party favicon service: that would leak
+ * every site the user inspects to Google, from an extension whose entire pitch
+ * is not leaking browsing data.
+ */
 function getFaviconUrl(domain) {
   if (!domain || domain === 'host-only') return '';
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32`;
+  const d = cleanDomain(domain);
+  const letter = (d[0] || '?').toUpperCase();
+  let hash = 0;
+  for (let i = 0; i < d.length; i++) hash = (hash * 31 + d.charCodeAt(i)) >>> 0;
+  const hue = hash % 360;
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">` +
+    `<rect width="32" height="32" rx="7" fill="hsl(${hue} 55% 42%)"/>` +
+    `<text x="16" y="22" font-family="system-ui,sans-serif" font-size="17" font-weight="700" fill="#fff" text-anchor="middle">${letter}</text>` +
+    `</svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 function formatRelativeTime(timestamp) {
@@ -299,6 +335,18 @@ $('logout-confirm-modal')?.addEventListener('click', (e) => {
   if (e.target.id === 'logout-confirm-modal') hideLogoutConfirmationModal();
 });
 
+// ---------------- PREVIOUS-INSTALL MERGE MODAL ----------------
+$('device-merge-close')?.addEventListener('click', hideDeviceMergeModal);
+$('device-merge-cancel')?.addEventListener('click', hideDeviceMergeModal);
+$('device-merge-confirm')?.addEventListener('click', async () => {
+  const device = pendingMergeDevice;
+  hideDeviceMergeModal();
+  if (device) await mergeDeviceIntoCurrent(device);
+});
+$('device-merge-modal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'device-merge-modal') hideDeviceMergeModal();
+});
+
 $('confirm-modal')?.addEventListener('click', (e) => {
   if (e.target.id === 'confirm-modal') hideDeleteConfirmationModal();
 });
@@ -307,6 +355,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     hideLogoutConfirmationModal();
     hideDeleteConfirmationModal();
+    hideDeviceMergeModal();
   }
 });
 
@@ -602,8 +651,18 @@ $('auth-form').onsubmit = async (e) => {
   e.preventDefault();
   const email = $('auth-email').value.trim();
   const password = $('auth-password').value;
-  const storage = await CH.storage.local.get('serverUrl').catch(() => ({}));
-  const serverUrl = storage?.serverUrl || 'http://localhost:8080';
+
+  // The server URL is visible and editable on this screen. We never fall back
+  // to a hidden production host: whatever is shown is what is used.
+  let serverUrl = String($('auth-server-url')?.value || '').trim();
+  if (!serverUrl) {
+    return status('Enter your sync server URL before signing in.', 'err');
+  }
+  try {
+    serverUrl = await setServerUrl(serverUrl);
+  } catch (err) {
+    return status(`Invalid sync server URL: ${err.message}`, 'err');
+  }
 
   const rememberMe = $('auth-remember-me')?.checked ?? true;
   if (authMode === 'login') {
@@ -700,8 +759,7 @@ $('forgot-form')?.addEventListener('submit', async (e) => {
   const email = $('forgot-email').value.trim();
   if (!email) return status('Please enter your account email.', 'err');
 
-  const storage = await CH.storage.local.get('serverUrl').catch(() => ({}));
-  const serverUrl = storage?.serverUrl || 'http://localhost:8080';
+  const serverUrl = String($('auth-server-url')?.value || '').trim() || (await getServerUrl());
 
   status('Sending password reset code via Gmail SMTP…');
   try {
@@ -992,9 +1050,12 @@ async function updateAccountTab() {
   }
 
   try {
-    const { serverUrl, vaultKeyDerived } = await CH.storage.local.get(['serverUrl', 'vaultKeyDerived']);
+    const serverUrl = await getServerUrl();
+    const { vaultKeyRaw } = await CH.storage.session.get('vaultKeyRaw');
+    const vaultKeyDerived = Array.isArray(vaultKeyRaw) && vaultKeyRaw.length === 32;
+
     const serverEl = $('account-server-url');
-    if (serverEl) serverEl.textContent = serverUrl || 'http://localhost:8080';
+    if (serverEl) serverEl.textContent = serverUrl || 'not configured';
 
     const vaultStatusEl = $('account-vault-status');
     if (vaultStatusEl) {
@@ -1022,37 +1083,37 @@ async function enterMainApp() {
   switchAppTab('cookies');
 
   await updateAccountTab();
+  await initSettingsForm();
 
   await initCurrentDevice();
   await checkVaultKeySyncStatus();
   await loadAllBrowserCookies();
   await loadDevicesAndRemoteSessions();
+  await maybeOfferDeviceMerge().catch((e) =>
+    console.debug('[switch] device merge prompt failed:', e),
+  );
   await checkActiveTabAndRenderBanner();
   updateHomeDashboard();
 
-  // Automatic two-way cloud sync whenever popup is opened:
-  // 1. Pushes any newly created/updated local browser cookies to cloud
-  // 2. Pulls all fresh remote sessions from all other devices/browsers
-  if (currentUser && currentDeviceId) {
-    send({ type: 'SYNC_PUSH_ALL' })
-      .then(async () => {
-        await loadDevicesAndRemoteSessions();
-        await updateAccountTab();
-      })
-      .catch((e) => console.debug('[switch] auto-sync on open error:', e));
+  // Pull only. Opening the popup must never upload anything; uploads are an
+  // explicit Save/Sync action (or opt-in auto-sync, which the user must turn on
+  // in Settings).
+  if (currentUser) {
+    loadDevicesAndRemoteSessions().catch((e) =>
+      console.debug('[switch] refresh on open failed:', e),
+    );
   }
 }
 
-// Auto-refresh cross-device sessions whenever extension popup regains focus
+// Refreshing focus pulls new remote sessions; it does not push local ones.
 window.addEventListener('focus', () => {
   if (currentUser && currentDeviceId) {
-    send({ type: 'SYNC_PUSH_ALL' })
+    loadDevicesAndRemoteSessions()
       .then(async () => {
-        await loadDevicesAndRemoteSessions();
         await loadAllBrowserCookies();
         await updateAccountTab();
       })
-      .catch(() => { });
+      .catch(() => {});
   }
 });
 
@@ -1068,6 +1129,96 @@ async function checkVaultKeySyncStatus() {
 }
 
 // ---------------- DEVICE MANAGEMENT ----------------
+
+/**
+ * True when another account record has the same coarse browser + OS as this
+ * install. This is only a *prompt* heuristic, never an automatic merge: two
+ * different machines can legitimately look identical.
+ */
+function deviceLooksLikeThisBrowser(device) {
+  if (!device || device.deviceId === currentDeviceId) return false;
+  const other = device.browserInfo || {};
+  const mine = currentDeviceInfo?.browserInfo || {};
+  if (!other.browser || !mine.browser) return false;
+  if (String(other.browser).toLowerCase() !== String(mine.browser).toLowerCase()) return false;
+  if (other.os && mine.os && other.os !== mine.os) return false;
+  return true;
+}
+
+let pendingMergeDevice = null;
+
+function showDeviceMergeModal(device) {
+  const modal = $('device-merge-modal');
+  if (!modal || !device?.deviceId) return;
+
+  pendingMergeDevice = device;
+
+  const box = $('device-merge-candidate');
+  if (box) {
+    box.textContent = '';
+
+    const title = document.createElement('strong');
+    title.textContent = device.name || 'Previous device';
+
+    const meta = document.createElement('span');
+    const domainCount = remoteSessions.filter((s) => s.deviceId === device.deviceId).length;
+    meta.textContent = `${formatRelativeTime(device.lastSeenAt)} · ${domainCount} synced domain${domainCount === 1 ? '' : 's'}`;
+
+    box.append(title, meta);
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function hideDeviceMergeModal() {
+  $('device-merge-modal')?.classList.add('hidden');
+  pendingMergeDevice = null;
+}
+
+async function maybeOfferDeviceMerge() {
+  if (!currentUser || !currentDeviceId) return;
+
+  const { deviceMergePromptedFor } = await CH.storage.local.get('deviceMergePromptedFor');
+  const promptKey = `${currentUser.id || currentUser.email || 'user'}:${currentDeviceId}`;
+  if (deviceMergePromptedFor === promptKey) return;
+
+  const candidate = userDevices
+    .filter((d) => d.deviceId !== currentDeviceId && deviceLooksLikeThisBrowser(d))
+    .sort((a, b) => new Date(b.lastSeenAt || 0) - new Date(a.lastSeenAt || 0))[0];
+
+  if (!candidate) return;
+
+  // One automatic prompt per account + install. The Devices tab keeps an
+  // explicit Merge action for every candidate, so "Keep separate" is not a
+  // dead end.
+  await CH.storage.local.set({ deviceMergePromptedFor: promptKey });
+  showDeviceMergeModal(candidate);
+}
+
+async function mergeDeviceIntoCurrent(device) {
+  if (!device?.deviceId) return;
+
+  status(`Merging ${device.name || 'previous install'} into this browser…`);
+  try {
+    const res = await send({ type: 'DEVICE_ADOPT', deviceId: device.deviceId });
+    if (!res?.ok) throw new Error(res?.error || 'device merge failed');
+
+    status(
+      `✓ Merged previous install. ${(Number(res.movedSessions) || 0) + (Number(res.mergedSessions) || 0)} session(s) kept.`,
+      'ok',
+      4000,
+    );
+
+    await initCurrentDevice();
+    await loadDevicesAndRemoteSessions();
+    await updateAccountTab();
+  } catch (e) {
+    status(`Merge failed: ${e?.message || e}`, 'err');
+    // The target may have been revoked from another device; refresh so the
+    // stale card does not keep offering a merge.
+    await loadDevicesAndRemoteSessions().catch(() => {});
+  }
+}
 
 async function initCurrentDevice() {
   try {
@@ -1088,7 +1239,7 @@ async function initCurrentDevice() {
 
       const browserEl = $('current-device-browser');
       if (browserEl) {
-        browserEl.textContent = `${devRes.browserInfo?.browser || 'Browser'} ${devRes.browserInfo?.browserVersion || ''}`.trim();
+        browserEl.textContent = `${devRes.browserInfo?.browser || 'Browser'} ${devRes.browserInfo?.browserMajorVersion || ''}`.trim();
       }
 
       const osEl = $('current-device-os');
@@ -1144,8 +1295,12 @@ function renderDevicesTab() {
 
   listEl.innerHTML = '';
 
-  // Other devices (exclude current device)
-  const otherDevices = userDevices.filter((d) => d.deviceId !== currentDeviceId);
+  // Other devices (exclude current device). Until the current id is known,
+  // showing every row as "other" would offer a merge of the current device into
+  // itself, which the server correctly rejects.
+  const otherDevices = currentDeviceId
+    ? userDevices.filter((d) => d.deviceId !== currentDeviceId)
+    : [];
 
   if (badgeEl) {
     badgeEl.textContent = userDevices.length;
@@ -1192,26 +1347,25 @@ function renderDevicesTab() {
 
     headerTop.append(title, timeBadge);
 
-    const isSameMachine = !!(
-      (device.systemId && currentSystemId && device.systemId === currentSystemId) ||
-      (device.browserInfo?.os &&
-        currentDeviceInfo?.browserInfo?.os &&
-        device.browserInfo.os === currentDeviceInfo.browserInfo.os &&
-        device.browserInfo?.platform === currentDeviceInfo?.browserInfo?.platform)
-    );
+    // The old fallback compared OS + platform, but `platform` is never
+    // uploaded, so every same-OS device was labelled "Same PC". systemId is
+    // random per profile and does not survive an uninstall either. Treat this
+    // as a recognition hint only; the user must confirm any merge.
+    const isLikelyPreviousInstall = deviceLooksLikeThisBrowser(device);
 
     const subRow = document.createElement('div');
     subRow.className = 'device-sub-row';
 
-    if (isSameMachine) {
+    if (isLikelyPreviousInstall) {
       const samePcBadge = document.createElement('span');
       samePcBadge.className = 'badge badge-same-pc';
-      samePcBadge.title = 'This browser is running on the same physical computer';
+      samePcBadge.title =
+        'Same browser and OS as this device. If this is an older install of this browser, use Merge.';
       samePcBadge.innerHTML = `
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/>
         </svg>
-        <span>Same PC</span>
+        <span>Same browser &amp; OS</span>
       `;
       subRow.append(samePcBadge);
     }
@@ -1302,7 +1456,7 @@ function renderDevicesTab() {
 
     // 1. Sync In Tokens Button
     const syncInBtn = document.createElement('button');
-    syncInBtn.className = `btn btn-sm ${isSameMachine ? 'btn-primary' : 'btn-outline'} device-sync-in-btn`;
+    syncInBtn.className = `btn btn-sm ${isLikelyPreviousInstall ? 'btn-primary' : 'btn-outline'} device-sync-in-btn`;
     syncInBtn.innerHTML = isAlreadySynced
       ? `
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1371,7 +1525,33 @@ function renderDevicesTab() {
       }
     };
 
-    actionsRow.append(syncInBtn, revokeBtn);
+    // 3. Merge Button (only for a record that looks like this browser)
+    if (isLikelyPreviousInstall) {
+      const mergeBtn = document.createElement('button');
+      mergeBtn.className = 'btn btn-sm btn-secondary device-merge-btn';
+      mergeBtn.innerHTML = `
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3"/>
+          <path d="M3 16v3a2 2 0 0 0 2 2h3"/>
+          <path d="M16 3h3a2 2 0 0 1 2 2v3"/>
+          <path d="M21 16v3a2 2 0 0 1-2 2h-3"/>
+          <path d="M8 12h8"/>
+        </svg>
+        Merge
+      `;
+      mergeBtn.title = `Merge this old install into the current browser and remove the duplicate device`;
+      mergeBtn.onclick = async () => {
+        const confirmed = confirm(
+          `Merge "${device.name || 'this device'}" into this browser?\n\nIts synced sessions will move here and the duplicate device record will be removed. Only do this if it is an older install of this browser.`,
+        );
+        if (!confirmed) return;
+        await mergeDeviceIntoCurrent(device);
+      };
+      actionsRow.append(syncInBtn, mergeBtn, revokeBtn);
+    } else {
+      actionsRow.append(syncInBtn, revokeBtn);
+    }
+
     card.appendChild(actionsRow);
 
     listEl.appendChild(card);
@@ -1646,7 +1826,7 @@ function renderHomeActiveSiteCard(info) {
   cardEl.innerHTML = `
     <div class="active-site-card-friendly">
       <div class="active-site-friendly-left">
-        <img class="active-site-favicon" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=32" alt="${escapeHtml(host)}" onerror="this.style.display='none'" />
+        <img class="active-site-favicon" src="${getFaviconUrl(host)}" alt="${escapeHtml(host)}" onerror="this.style.display='none'" />
         <div class="active-site-meta-visual">
           <div class="active-site-host-row">
             <span class="active-site-host-name">${escapeHtml(host)}</span>
@@ -1675,14 +1855,25 @@ function renderHomeActiveSiteCard(info) {
   if (syncSiteBtn) {
     syncSiteBtn.onclick = async () => {
       syncSiteBtn.disabled = true;
+      await ensureHostAccess(host);
       syncSiteBtn.innerHTML = `<span>…</span>`;
       status(`Syncing ${host}…`);
       try {
-        await send({
+        const res = await send({
           type: 'SYNC_PUSH_DOMAIN',
           host,
           cookies: hostCookies,
         });
+        if (res?.results?.[0]?.status === 'conflict') {
+          status(
+            `Cloud has a newer copy of ${host}. Use Adopt to pull it instead.`,
+            'err',
+            3200,
+          );
+          syncSiteBtn.disabled = false;
+          syncSiteBtn.innerHTML = `<span>Sync Site</span>`;
+          return;
+        }
         await loadDevicesAndRemoteSessions();
         status(`✓ Synced ${host}!`, 'ok');
         syncSiteBtn.innerHTML = `<span>✓ Synced</span>`;
@@ -1831,7 +2022,7 @@ function renderHomeSuggestions() {
 
     const img = document.createElement('img');
     img.className = 'suggestion-favicon';
-    img.src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(item.host)}&sz=32`;
+    img.src = getFaviconUrl(item.host);
     img.alt = item.host;
     img.onerror = () => { img.style.display = 'none'; };
 
@@ -2632,14 +2823,25 @@ function renderCookieFeed() {
         syncBtn.onclick = async (e) => {
           e.stopPropagation();
           syncBtn.disabled = true;
+          await ensureHostAccess(domain);
           syncBtn.innerHTML = `<span>Syncing…</span>`;
           status(`Syncing ${domain} tokens to cloud vault…`);
           try {
-            await send({
+            const res = await send({
               type: 'SYNC_PUSH_DOMAIN',
               host: domain,
               cookies: cookiesInDomain,
             });
+            if (res?.results?.[0]?.status === 'conflict') {
+              status(
+                `Cloud has a newer copy of ${domain}. Pull it before overwriting.`,
+                'err',
+                3200,
+              );
+              syncBtn.disabled = false;
+              syncBtn.innerHTML = `<span>Sync</span>`;
+              return;
+            }
             await loadDevicesAndRemoteSessions();
             status(`✓ Synced ${domain} (${cookiesInDomain.length} tokens) to cloud vault!`, 'ok');
             renderCookieFeed();
@@ -2881,10 +3083,10 @@ if (vaultSyncForm) {
 
       if (msgEl) {
         msgEl.className = 'vault-sync-msg ok';
-        msgEl.textContent = '✓ Encryption key synced! Uploading sessions to vault…';
+        msgEl.textContent = '✓ Vault unlocked. Syncing saved sites only…';
       }
 
-      await send({ type: 'SYNC_PUSH_ALL' });
+      await send({ type: 'SYNC_PUSH_ALL', explicit: true });
       await loadAllBrowserCookies();
       await loadDevicesAndRemoteSessions();
       await checkActiveTabAndRenderBanner();
@@ -2912,11 +3114,11 @@ const syncAllBtn = $('cookie-sync-all-btn');
 if (syncAllBtn) {
   syncAllBtn.onclick = async () => {
     syncAllBtn.disabled = true;
-    status('Syncing all local domains to encrypted cloud vault…');
+    status('Syncing sites you have saved…');
     try {
-      const res = await send({ type: 'SYNC_PUSH_ALL' });
+      const res = await send({ type: 'SYNC_PUSH_ALL', explicit: true });
       await loadDevicesAndRemoteSessions();
-      status(`✓ Synced ${res?.syncedDomainsCount || 0} domains to encrypted cloud vault!`, 'ok');
+      status(`✓ Synced ${res?.syncedDomainsCount || 0} saved site(s) to your encrypted vault.`, 'ok');
     } catch (e) {
       status(`Sync failed: ${e?.message || e}`, 'err');
     } finally {
@@ -2937,11 +3139,7 @@ if (inspectSyncBtn) {
     if (tab?.url && tab.url.startsWith('http')) {
       try {
         domain = new URL(tab.url).hostname;
-        const rootDomain = domain.split('.').slice(-2).join('.');
-        cookies = allCookies.filter((c) => {
-          const d = String(c.domain || '').replace(/^\./, '').toLowerCase().trim();
-          return d === domain || d === rootDomain || domain.endsWith('.' + d);
-        });
+        cookies = allCookies.filter((c) => hostMatches(c.domain, domain));
       } catch { }
     }
     await triggerInspectSyncAnimation(domain, cookies.length ? cookies : allCookies.slice(0, 20));
@@ -3073,18 +3271,18 @@ $('account-logout-btn').onclick = () => {
 
 $('logout-modal-confirm')?.addEventListener('click', async () => {
   hideLogoutConfirmationModal();
-  status('Logging out…');
+  status('Signing out…');
   try {
-    await send({ type: 'AUTH_LOGOUT', clearCookies: false });
-    currentUser = null;
-    allCookiesCache = [];
-    remoteSessions = [];
-    userDevices = [];
-    allDevices = [];
-    status('Logged out successfully.', 'ok');
+    await send({ type: 'AUTH_LOGOUT' });
   } catch (err) {
-    status(`Logged out: ${err?.message || err}`, 'ok');
+    console.warn('[switch] logout request failed:', err?.message || err);
   }
+  currentUser = null;
+  allCookies = [];
+  remoteSessions = [];
+  userDevices = [];
+  allDevices = [];
+  status('Signed out of this browser. Synced sessions were kept.', 'ok', 2600);
   showScreen('login');
 });
 
@@ -3092,6 +3290,9 @@ $('logout-modal-confirm')?.addEventListener('click', async () => {
 const lockBtn = $('account-lock-btn');
 if (lockBtn) {
   lockBtn.onclick = async () => {
+    // The key lives in chrome.storage.session now. Remove both the session
+    // copy and the legacy persistent marker.
+    await CH.storage.session.remove('vaultKeyRaw');
     await CH.storage.local.remove(['vaultKeyRaw', 'vaultKeyDerived']);
     status('Vault key locked from memory.', 'ok');
     await checkVaultKeySyncStatus();
@@ -3099,10 +3300,144 @@ if (lockBtn) {
   };
 }
 
+// Privacy notice
+$('account-privacy-btn')?.addEventListener('click', () => {
+  CH.tabs.create({ url: CH.runtime.getURL('src/onboarding/privacy.html') });
+});
+
+// ---------------- SYNC SETTINGS ----------------
+
+async function initSettingsForm() {
+  const form = $('settings-form');
+  if (!form) return;
+
+  const res = await send({ type: 'SETTINGS_GET' }).catch(() => null);
+  if (!res) return;
+
+  if ($('settings-server-url')) $('settings-server-url').value = res.serverUrl || '';
+  if ($('settings-auto-sync')) $('settings-auto-sync').checked = !!res.autoSync;
+
+  if (!form.dataset.bound) {
+    form.dataset.bound = '1';
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = $('settings-msg');
+      const serverValue = String($('settings-server-url')?.value || '').trim();
+      if (!serverValue) {
+        if (msg) {
+          msg.textContent = 'Sync server URL cannot be empty.';
+          msg.className = 'settings-msg err';
+          msg.classList.remove('hidden');
+        }
+        return;
+      }
+
+      const saveBtn = $('settings-save-btn');
+      if (saveBtn) saveBtn.disabled = true;
+      try {
+        const updated = await send({
+          type: 'AUTH_SET_SERVER',
+          serverUrl: serverValue,
+        });
+        await send({
+          type: 'SETTINGS_SET',
+          autoSync: !!$('settings-auto-sync')?.checked,
+        });
+        if (msg) {
+          msg.textContent = `Saved. Server: ${updated.serverUrl}`;
+          msg.className = 'settings-msg ok';
+          msg.classList.remove('hidden');
+        }
+        await updateAccountTab();
+      } catch (err) {
+        if (msg) {
+          msg.textContent = `Could not save settings: ${err?.message || err}`;
+          msg.className = 'settings-msg err';
+          msg.classList.remove('hidden');
+        }
+      } finally {
+        if (saveBtn) saveBtn.disabled = false;
+      }
+    });
+  }
+}
+
+// ---------------- ACCOUNT EXPORT / DELETE ----------------
+
+function hideDeleteAccountModal() {
+  $('delete-account-modal')?.classList.add('hidden');
+}
+function showDeleteAccountModal() {
+  $('delete-account-modal')?.classList.remove('hidden');
+}
+
+$('delete-account-close')?.addEventListener('click', hideDeleteAccountModal);
+$('delete-account-cancel')?.addEventListener('click', hideDeleteAccountModal);
+$('delete-account-modal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'delete-account-modal') hideDeleteAccountModal();
+});
+
+$('account-export-btn')?.addEventListener('click', async () => {
+  const btn = $('account-export-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const res = await send({ type: 'ACCOUNT_EXPORT' });
+    const blob = new Blob([JSON.stringify(res.data, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `switch-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    status('Export downloaded. Envelopes are encrypted with your master password.', 'ok', 3200);
+  } catch (err) {
+    status(`Export failed: ${err?.message || err}`, 'err');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+});
+
+$('account-delete-btn')?.addEventListener('click', showDeleteAccountModal);
+
+$('delete-account-confirm')?.addEventListener('click', async () => {
+  hideDeleteAccountModal();
+  status('Deleting account and all synced data…');
+  try {
+    await send({ type: 'ACCOUNT_DELETE', confirm: true });
+    currentUser = null;
+    allCookies = [];
+    remoteSessions = [];
+    userDevices = [];
+    allDevices = [];
+    status('Account deleted. Nothing remains on the server.', 'ok', 3200);
+  } catch (err) {
+    status(`Deletion failed: ${err?.message || err}`, 'err');
+    return;
+  }
+  showScreen('login');
+});
+
 // ---------------- INITIALIZATION ----------------
 
 async function init() {
   await initTheme();
+
+  // Show the configured (or development default) server explicitly. Nothing is
+  // silently assumed.
+  try {
+    const configured = await getServerUrl();
+    if ($('auth-server-url')) $('auth-server-url').value = configured || '';
+    if ($('auth-server-hint')) {
+      $('auth-server-hint').textContent =
+        configured && configured.startsWith('http://localhost')
+          ? 'Development default: http://localhost:8080. Replace it with your production sync server before signing in.'
+          : 'Only encrypted blobs are stored on this server.';
+    }
+  } catch (e) {
+    console.warn('[switch] could not read server URL:', e?.message || e);
+  }
 
   let workerOk = true;
   try {

@@ -4,12 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Help & Support — Switch Extension</title>
-  <meta name="description" content="Get direct support, read FAQs, and troubleshoot Switch cross-browser session bridge. Contact us directly at anigokala3@gmail.com." />
-  <link rel="icon" type="image/svg+xml" href="../src/assets/logo.svg" />
+  <meta name="description" content="Get support, read FAQs, and troubleshoot the Switch cross-browser session bridge." />
+  <link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
   <link rel="stylesheet" href="style.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
   <!-- Ambient Gradient Light Background -->
@@ -24,7 +21,7 @@
     <div class="container masthead-inner">
       <a href="index.html" class="brand-entity">
         <div class="brand-monogram">
-          <img src="../src/assets/icon-128.png" alt="Switch" class="brand-img" width="30" height="30" />
+          <img src="assets/icon-128.png" alt="Switch" class="brand-img" width="30" height="30" />
         </div>
         <span class="brand-wordmark">Switch</span>
       </a>
@@ -91,7 +88,7 @@
             </span>
             <div class="nav-row-meta">
               <span class="nav-row-title">Download for Browsers</span>
-              <span class="nav-row-sub">Chrome, Firefox, Brave &amp; Edge</span>
+              <span class="nav-row-sub">Chrome, Edge &amp; Brave (Chromium)</span>
             </div>
             <svg class="nav-row-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
           </a>
@@ -135,17 +132,13 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>
             <span>Feedback</span>
           </a>
-          <a href="admin.html" class="mobile-tool-card">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-            <span>Admin Ops</span>
-          </a>
         </div>
 
         <!-- Sleek Footer Strip -->
         <div class="mobile-drawer-footer">
           <div class="drawer-status-pill">
             <span class="status-pulse-dot"></span>
-            <span>MV3 Live &amp; Verified • v1.0.4</span>
+            <span>Pre-release build &bull; v0.2.0</span>
           </div>
         </div>
       </div>
@@ -166,7 +159,7 @@
       </div>
     </section>
 
-    <!-- DIRECT DEVELOPER CONTACT SPOTLIGHT (email: anigokala3@gmail.com) -->
+    <!-- DIRECT DEVELOPER CONTACT SPOTLIGHT (email: contact@your-domain.example) -->
     <section class="container">
       <div class="contact-spotlight-card">
         <div class="contact-info-left">
@@ -184,7 +177,7 @@
               <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
               <polyline points="22,6 12,13 2,6"/>
             </svg>
-            <span class="email-address-text" id="supportEmailText">anigokala3@gmail.com</span>
+            <span class="email-address-text" id="supportEmailText">contact@your-domain.example</span>
             <button class="copy-email-btn" id="copyEmailBtn" title="Copy email address">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
@@ -196,7 +189,7 @@
         </div>
 
         <div class="contact-action-right">
-          <a href="mailto:anigokala3@gmail.com?subject=Switch%20Support%20Inquiry" class="btn btn-primary btn-lg">
+          <a href="mailto:contact@your-domain.example?subject=Switch%20Support%20Inquiry" class="btn btn-primary btn-lg">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
               <line x1="22" y1="2" x2="11" y2="13"/>
               <polygon points="22 2 15 22 11 13 2 9 22 2"/>
@@ -303,6 +296,7 @@
                 <span class="btn-spinner hidden" id="feedbackSpinner" aria-hidden="true"></span>
               </button>
             </div>
+            <p id="feedbackError" class="feedback-error" role="alert" hidden></p>
           </form>
         </div>
 
@@ -344,7 +338,7 @@
             </button>
             <div class="faq-content">
               <p>
-                <strong>No. Absolute zero visibility.</strong> Before any cookie envelope leaves your local computer, the extension uses standard WebCrypto APIs to derive an AES-256-GCM encryption key from your Master Password using PBKDF2 (100,000 iterations with SHA-256). The cloud server only ever receives opaque ciphertext. Decryption can only take place inside your browser when your Master Password is provided.
+                <strong>No. Absolute zero visibility.</strong> Before any cookie envelope leaves your local computer, the extension uses standard WebCrypto APIs to derive an AES-256-GCM encryption key from your Master Password using PBKDF2 (600,000 iterations with SHA-256). The cloud server only ever receives opaque ciphertext. Decryption can only take place inside your browser when your Master Password is provided.
               </p>
             </div>
           </div>
@@ -396,7 +390,7 @@
             </button>
             <div class="faq-content">
               <p>
-                Switch supports Google Chrome, Microsoft Edge, Brave Browser, Mozilla Firefox, Arc Browser, and Vivaldi. All Chromium-based and Gecko-based browsers are supported across Windows, macOS, and Linux.
+                Switch supports Chromium-based browsers: Google Chrome, Microsoft Edge, Brave, Arc and Vivaldi on Windows, macOS and Linux. Firefox is <strong>not supported yet</strong> — it uses a different extension platform and no Gecko build ships today.
               </p>
             </div>
           </div>
@@ -462,7 +456,7 @@
               Direct Email Assistance
             </h4>
             <p>
-              Need hands-on debugging or enterprise onboarding? Write directly to <a href="mailto:anigokala3@gmail.com" style="color: var(--cyan-core); font-weight: 600;">anigokala3@gmail.com</a> with your browser version and issue description.
+              Need hands-on debugging or enterprise onboarding? Write directly to <a href="mailto:contact@your-domain.example" style="color: var(--cyan-core); font-weight: 600;">contact@your-domain.example</a> with your browser version and issue description.
             </p>
           </div>
         </div>
@@ -477,27 +471,24 @@
       <div class="colophon-col colophon-brand-col">
         <div class="colophon-brand-header">
           <div class="brand-monogram" style="width: 28px; height: 28px;">
-            <img src="../src/assets/icon-48.png" alt="Switch" width="20" height="20" />
+            <img src="assets/icon-48.png" alt="Switch" width="20" height="20" />
           </div>
           <span class="colophon-logo">Switch</span>
         </div>
         <p class="colophon-mission">
-          The zero-knowledge session bridge for modern multi-browser users. Move authenticated web logins between Chrome, Edge, Brave, and Firefox securely.
+          The zero-knowledge session bridge for modern multi-browser users. Move authenticated web logins between Chromium browsers securely.
         </p>
-        <div class="colophon-status-pill">
-          <span class="status-dot"></span>
-          <span>Zero Telemetry • Client Vault Active</span>
-        </div>
+
       </div>
 
       <!-- Col 2: Supported Fleet & Downloads -->
       <div class="colophon-col">
-        <h4 class="colophon-col-title">Download Stores</h4>
+        <h4 class="colophon-col-title">Install &amp; Browser Support</h4>
         <ul class="colophon-link-list">
-          <li><a href="download.html" class="colophon-link">Google Chrome Store</a></li>
-          <li><a href="download.html" class="colophon-link">Microsoft Edge Add-ons</a></li>
+          <li><a href="download.html" class="colophon-link">Google Chrome (load unpacked)</a></li>
+          <li><a href="download.html" class="colophon-link">Microsoft Edge (load unpacked)</a></li>
           <li><a href="download.html" class="colophon-link">Brave Browser (Chromium)</a></li>
-          <li><a href="download.html" class="colophon-link">Mozilla Firefox (AMO)</a></li>
+          <li><a href="download.html#roadmap" class="colophon-link">Mozilla Firefox (planned, not shipped)</a></li>
           <li><a href="download.html" class="colophon-link">Arc & Vivaldi</a></li>
         </ul>
       </div>
@@ -520,10 +511,9 @@
         <ul class="colophon-link-list">
           <li><a href="#feedback" class="colophon-link">Share Feedback (Bug / Idea)</a></li>
           <li><a href="support.html" class="colophon-link">Help & Documentation</a></li>
-          <li><a href="admin.html" class="colophon-link">Admin Workstation</a></li>
           <li><a href="support.html#faq" class="colophon-link">Frequently Asked Questions</a></li>
           <li><a href="support.html#troubleshoot" class="colophon-link">Troubleshooting Checklist</a></li>
-          <li><a href="mailto:anigokala3@gmail.com" class="colophon-link">Email Maintainer</a></li>
+          <li><a href="mailto:contact@your-domain.example" class="colophon-link">Email Maintainer</a></li>
           <li><a href="index.html#demo" class="colophon-link">Live Session Simulator</a></li>
         </ul>
       </div>
@@ -533,7 +523,7 @@
         <h4 class="colophon-col-title">Donate & Community</h4>
         <ul class="colophon-link-list">
           <li><a href="donate.html" class="colophon-link">Donate via UPI</a></li>
-          <li><a href="donate.html" class="colophon-link">VPA: anigokala3@oksbi</a></li>
+          <li><a href="donate.html" class="colophon-link">Donation details</a></li>
           <li><a href="donate.html#qr" class="colophon-link">Scan UPI QR Code</a></li>
           <li><a href="donate.html" class="colophon-link">GPay • PhonePe • Paytm • BHIM</a></li>
           <li><a href="about.html" class="colophon-link">Manifest V3 Open Specification</a></li>
@@ -544,16 +534,16 @@
     <!-- Sub-Colophon Bottom Legal Bar -->
     <div class="container colophon-bottom">
       <div class="colophon-legal-text">
-        <span>© 2026 Switch Project. Released under MIT License. No tracking cookies, no server-side telemetry.</span>
+        <span>© 2026 Switch Project. Released under the MIT License. Optional sync stores only encrypted data; no analytics or advertising trackers.</span>
       </div>
       <div class="colophon-bottom-links">
-        <a href="about.html" class="colophon-bottom-link">Privacy Oath</a>
+        <a href="privacy.html" class="colophon-bottom-link">Privacy Policy</a>
+        <span class="bullet-sep">•</span>
+        <a href="terms.html" class="colophon-bottom-link">Terms of Service</a>
         <span class="bullet-sep">•</span>
         <a href="support.html" class="colophon-bottom-link">Support Desk</a>
         <span class="bullet-sep">•</span>
-        <a href="admin.html" class="colophon-bottom-link">Admin Panel</a>
-        <span class="bullet-sep">•</span>
-        <a href="mailto:anigokala3@gmail.com" class="colophon-bottom-link">anigokala3@gmail.com</a>
+        <a href="mailto:contact@your-domain.example" class="colophon-bottom-link" data-site-email-link data-site-email>contact@your-domain.example</a>
         <button class="back-to-top-btn" id="backToTopBtn" type="button" title="Back to top">
           <span>Top</span>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -564,6 +554,7 @@
     </div>
   </footer>
 
+  <script src="config.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

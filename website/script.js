@@ -1,5 +1,93 @@
 // Switch Promotional Simulator Script
 document.addEventListener('DOMContentLoaded', () => {
+  // -------------------------------------------------------------------------
+  // Operator-configurable site values (see config.js).
+  // The committed defaults are placeholders; this keeps a personal address or
+  // an unverified legal identity from being hard-coded into twenty places.
+  // -------------------------------------------------------------------------
+  const SITE = Object.assign(
+    {
+      apiBaseUrl: '',
+      contactEmail: 'contact@your-domain.example',
+      donationUpi: '',
+      donationUpiName: '',
+      donationQrImage: '',
+      legalEntity: '[Legal entity name — not yet configured]',
+      governingLaw: '[Governing law / jurisdiction — not yet configured]',
+      privacyContact: 'privacy@your-domain.example',
+      securityContact: 'security@your-domain.example',
+    },
+    window.SWITCH_SITE || {},
+  );
+
+  function applySiteConfig() {
+    const EMAIL_PLACEHOLDER = 'contact@your-domain.example';
+    const UPI_PLACEHOLDER = 'your-vpa@bank';
+
+    // Rewrite every mailto link, preserving any pre-set subject.
+    document.querySelectorAll('a[href*="mailto:"]').forEach((el) => {
+      const href = el.getAttribute('href') || '';
+      if (!href.includes(EMAIL_PLACEHOLDER)) return;
+      el.setAttribute('href', href.split(EMAIL_PLACEHOLDER).join(SITE.contactEmail));
+    });
+
+    // Replace visible placeholder text anywhere on the page (footer, support,
+    // donation box, inline copy). This keeps one source of truth in config.js.
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+    textNodes.forEach((node) => {
+      const value = node.nodeValue || '';
+      if (value.includes(EMAIL_PLACEHOLDER) || value.includes(UPI_PLACEHOLDER)) {
+        node.nodeValue = value
+          .split(EMAIL_PLACEHOLDER)
+          .join(SITE.contactEmail)
+          .split(UPI_PLACEHOLDER)
+          .join(SITE.donationUpi);
+      }
+    });
+
+    document.querySelectorAll('[data-site-legal-entity]').forEach((el) => {
+      el.textContent = SITE.legalEntity;
+    });
+    document.querySelectorAll('[data-site-privacy-contact]').forEach((el) => {
+      el.textContent = SITE.privacyContact;
+    });
+    document.querySelectorAll('[data-site-security-contact]').forEach((el) => {
+      el.textContent = SITE.securityContact;
+    });
+    document.querySelectorAll('[data-site-governing-law]').forEach((el) => {
+      el.textContent = SITE.governingLaw;
+    });
+
+    // Only render a donation QR when the operator supplies a local image.
+    // Never call a third-party QR service from a privacy-focused site.
+    const qrWrap = document.getElementById('donateQrWrap');
+    if (qrWrap && SITE.donationQrImage) {
+      qrWrap.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = SITE.donationQrImage;
+      img.alt = `UPI QR code for ${SITE.donationUpi}`;
+      img.className = 'qr-code-img';
+      img.width = 200;
+      img.height = 200;
+      qrWrap.appendChild(img);
+    }
+
+    // A blank VPA means "not configured": hide the payment surface instead of
+    // showing a QR that cannot be paid. A placeholder address must never be
+    // displayed as if it were real.
+    if (!SITE.donationUpi) {
+      document.querySelectorAll('.donate-stage, .donate-card, .upi-box, .donate-qr-frame').forEach((el) => {
+        el.hidden = true;
+      });
+      const notice = document.getElementById('donateNotConfigured');
+      if (notice) notice.hidden = false;
+    }
+  }
+
+  applySiteConfig();
+
   const btnTriggerSwap = document.getElementById('btnTriggerSwap');
   const animStage = document.getElementById('animStage');
   const slabOld = document.getElementById('slabOld');
@@ -73,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (copyUpiBtn) {
     copyUpiBtn.addEventListener('click', async () => {
       try {
-        await navigator.clipboard.writeText('anigokala3@oksbi');
+        await navigator.clipboard.writeText(SITE.donationUpi);
         copyUpiText.textContent = 'Copied!';
         copyUpiBtn.classList.add('copied');
         copyUpiBtn.style.color = '#10b981';
@@ -83,11 +171,14 @@ document.addEventListener('DOMContentLoaded', () => {
           copyUpiBtn.style.color = '';
         }, 2000);
       } catch (err) {
-        // Fallback
-        const range = document.createRange();
-        range.selectNode(document.getElementById('upiAddressText'));
-        window.getSelection().removeAllRanges();
-        window.getSelection().addRange(range);
+        // Fallback: select the text so the user can copy it manually.
+        const target = document.getElementById('upiAddressText');
+        if (target) {
+          const range = document.createRange();
+          range.selectNode(target);
+          window.getSelection().removeAllRanges();
+          window.getSelection().addRange(range);
+        }
         copyUpiText.textContent = 'Selected!';
       }
     });
@@ -134,53 +225,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (detectedName && detectedBtn) {
     const ua = navigator.userAgent;
+    const DEV_BUILD = {
+      btnText: 'Developer build — load unpacked',
+      url: '#install-dev',
+    };
     let browser = {
       name: 'Google Chrome',
       posClass: 'chrome-pos',
-      desc: 'Optimized for Chrome & Chromium engines. Native Manifest V3 session bridge.',
-      btnText: 'Add to Chrome — Free',
-      url: 'https://chromewebstore.google.com'
+      desc: 'Switch targets Chromium browsers. Chrome is the primary development target.',
+      ...DEV_BUILD,
     };
 
     if (/Edg/i.test(ua)) {
       browser = {
         name: 'Microsoft Edge',
         posClass: 'edge-pos',
-        desc: 'Verified for Microsoft Edge on Windows 10/11 & macOS. Enterprise session bridge.',
-        btnText: 'Get Edge Add-on — Free',
-        url: 'https://microsoftedge.microsoft.com/addons'
+        desc: 'Edge is Chromium-based and can load the same unpacked developer build.',
+        ...DEV_BUILD,
       };
-    } else if (navigator.brave && navigator.brave.isBrave || /Brave/i.test(ua)) {
+    } else if ((navigator.brave && navigator.brave.isBrave) || /Brave/i.test(ua)) {
       browser = {
         name: 'Brave Browser',
         posClass: 'brave-pos',
-        desc: 'Chromium native. Fully honors Brave Shields and private window session security.',
-        btnText: 'Add to Brave — Free',
-        url: 'https://chromewebstore.google.com'
+        desc: 'Brave is Chromium-based; Brave Shields may affect third-party cookie behaviour on some sites.',
+        ...DEV_BUILD,
       };
     } else if (/Firefox/i.test(ua)) {
       browser = {
         name: 'Mozilla Firefox',
         posClass: 'firefox-pos',
-        desc: 'Tailored for Mozilla Firefox Gecko engine and multi-account container profiles.',
-        btnText: 'Get Firefox Add-on — Free',
-        url: 'https://addons.mozilla.org'
+        desc: 'Firefox is not supported yet. Switch uses Chromium extension APIs and ships no Gecko build.',
+        btnText: 'See the roadmap',
+        url: '#roadmap',
       };
     } else if (/Arc/i.test(ua)) {
       browser = {
         name: 'Arc Browser',
         posClass: 'arc-pos',
-        desc: 'Power-user Chromium build. Seamless session handoff across custom Arc Spaces.',
-        btnText: 'Add to Arc — Free',
-        url: 'https://chromewebstore.google.com'
+        desc: 'Arc is Chromium-based and can load the unpacked developer build.',
+        ...DEV_BUILD,
       };
     } else if (/OPR|Opera/i.test(ua)) {
       browser = {
         name: 'Opera Browser',
         posClass: 'chrome-pos',
-        desc: 'Chromium-compatible engine. Install directly via Chrome Web Store.',
-        btnText: 'Add to Opera — Free',
-        url: 'https://chromewebstore.google.com'
+        desc: 'Opera is Chromium-based and can load the unpacked developer build.',
+        ...DEV_BUILD,
       };
     }
 
@@ -218,14 +308,14 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // =========================================================================
-  // Copy Support Email Address (anigokala3@gmail.com)
+  // Copy support email address
   // =========================================================================
   const copyEmailBtn = document.getElementById('copyEmailBtn');
   const copyEmailText = document.getElementById('copyEmailText');
   if (copyEmailBtn) {
     copyEmailBtn.addEventListener('click', async () => {
       try {
-        await navigator.clipboard.writeText('anigokala3@gmail.com');
+        await navigator.clipboard.writeText(SITE.contactEmail);
         copyEmailText.textContent = 'Copied!';
         copyEmailBtn.classList.add('copied');
         copyEmailBtn.style.color = '#10b981';
@@ -236,7 +326,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 2000);
       } catch (err) {
         const emailEl = document.getElementById('supportEmailText');
-        const range = document.createRange();
+        if (emailEl) {
+          const range = document.createRange();
+          range.selectNode(emailEl);
+          window.getSelection().removeAllRanges();
+          window.getSelection().addRange(range);
+        }
         copyEmailText.textContent = 'Selected!';
       }
     });
@@ -316,6 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const feedbackCharCounter = document.getElementById('feedbackCharCounter');
   const feedbackSubmitBtn = document.getElementById('feedbackSubmitBtn');
   const feedbackSpinner = document.getElementById('feedbackSpinner');
+  const feedbackError = document.getElementById('feedbackError');
   const feedbackResetBtn = document.getElementById('feedbackResetBtn');
   const modalHeaderBadgeText = document.getElementById('modalHeaderBadgeText');
 
@@ -487,30 +583,63 @@ document.addEventListener('DOMContentLoaded', () => {
         feedbackSubmitBtn.disabled = true;
         if (feedbackSpinner) feedbackSpinner.classList.remove('hidden');
       }
+      if (feedbackError) {
+        feedbackError.hidden = true;
+        feedbackError.textContent = '';
+      }
+
+      const showFeedbackError = (message) => {
+        if (feedbackError) {
+          // Build the node tree instead of injecting server/config text as HTML.
+          feedbackError.textContent = '';
+          feedbackError.append(document.createTextNode(`${message} `));
+          const link = document.createElement('a');
+          link.href = `mailto:${SITE.contactEmail}`;
+          link.textContent = SITE.contactEmail;
+          feedbackError.append(document.createTextNode('You can also email '));
+          feedbackError.append(link);
+          feedbackError.append(document.createTextNode('.'));
+          feedbackError.hidden = false;
+        }
+        if (feedbackSubmitBtn) feedbackSubmitBtn.disabled = false;
+        if (feedbackSpinner) feedbackSpinner.classList.add('hidden');
+      };
+
+      const apiBase = String(SITE.apiBaseUrl || '').replace(/\/+$/, '');
+      if (!apiBase) {
+        // No endpoint configured: say so rather than faking a successful send.
+        showFeedbackError('Online feedback is not configured on this deployment.');
+        return;
+      }
 
       const payload = {
         type: activeType,
         description: desc,
-        timestamp: new Date().toISOString()
       };
 
       try {
-        await fetch('http://localhost:8080/v1/feedback', {
+        const res = await fetch(`${apiBase}/v1/feedback`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
         });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          const reason =
+            res.status === 429
+              ? 'Too many submissions from this network. Try again later.'
+              : body.message || `The server rejected the submission (HTTP ${res.status}).`;
+          showFeedbackError(reason);
+          return;
+        }
       } catch (err) {
-        console.warn('[switch] feedback API offline, saved locally:', err);
+        console.warn('[switch] feedback API unreachable:', err);
+        showFeedbackError('Could not reach the feedback service.');
+        return;
       }
 
-      try {
-        const existing = JSON.parse(localStorage.getItem('switch_feedback_history') || '[]');
-        existing.push(payload);
-        localStorage.setItem('switch_feedback_history', JSON.stringify(existing.slice(-20)));
-      } catch (storageErr) {
-        console.warn('[switch] localStorage write error:', storageErr);
-      }
+      // Do not persist feedback text in localStorage: it may contain personal
+      // details, and a fake local copy is not a substitute for delivery.
 
       // Render Dynamic Success State
       const currentConfig = typeConfigs[activeType] || typeConfigs.bug;
