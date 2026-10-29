@@ -1,7 +1,7 @@
 # Switch — Product Overview & Screen-by-Screen Guide
 
 > **Zero-Knowledge Cross-Browser Session Bridge**  
-> Move active web login sessions seamlessly between browsers (Chrome, Edge, Firefox, Brave) and computers with zero-knowledge end-to-end encryption.
+> Move active web login sessions between Chromium browsers (Chrome, Edge, Brave and similar) and computers with zero-knowledge end-to-end encryption. This is a pre-release build; Firefox is not supported yet.
 
 ---
 
@@ -16,7 +16,7 @@
 
 ### The Zero-Knowledge Guarantee
 Switch is engineered with a **zero-knowledge cryptographic vault**:
-- Master passwords derive an encryption key locally via **PBKDF2** (100,000 iterations + SHA-256).
+- Master passwords derive an encryption key locally via **PBKDF2** (600,000 iterations + SHA-256).
 - All session tokens and cookies are sealed locally using **AES-256-GCM** before any sync.
 - The sync server and MongoDB store only ciphertext envelopes; the server operator **cannot read** user session cookies, plaintext tokens, or passwords.
 
@@ -165,7 +165,7 @@ Whenever your currently active tab matches a domain with sessions from other dev
   - Active domain badge (`zapier.com`).
   - Status badge: `⚡ Both Logged In`, `🔑 Cloud Session Ready`, or `⚡ Swapped Session Active`.
 - **Hero Device & Token Row**:
-  - High-fidelity visual browser SVG logo (Chrome, Edge, Firefox, Brave, Safari, Opera).
+  - High-fidelity visual browser SVG logo set used in design mockups (Chrome, Edge, Firefox, Brave, Safari, Opera). Firefox assets are illustrative only; the extension itself is Chromium-only.
   - Clean device name (`Edge 155 · Windows`).
   - Real-time token breakdown (`29 remote tokens • 15 local cookies`).
 - **Interactive Action Buttons**:
@@ -328,7 +328,7 @@ Switch handles the notoriously complex world of modern browser cookies:
 | **Domain vs Host-Only** | Distinguishes between `.example.com` (domain cookie) and `example.com` (host-only cookie) to prevent scope widening. |
 | **`__Host-` Prefix** | Enforces `Secure=true`, `Path=/`, and host-only attributes as required by RFC 6265bis. |
 | **`__Secure-` Prefix** | Enforces `Secure=true`. |
-| **SameSite Restrictions** | Enforces `Secure=true` for `SameSite=None`; maps browser quirks (e.g., Firefox `unspecified` → `lax`). |
+| **SameSite Restrictions** | Enforces `Secure=true` for `SameSite=None`; normalises unsupported `sameSite` values to a safe accepted value. |
 | **Partitioned Cookies (CHIPS)** | Preserves the `partitionKey` so partitioned cookies load into the proper origin bucket. |
 | **Anti-Looping Protection** | If a site rejects a session due to device/TLS binding, Switch suppresses continuous prompts to avoid infinite loops. |
 
@@ -392,7 +392,7 @@ When the user clicks `↺ Go Back` or `↺ Rollback`:
 ## 6. Technology Stack Summary
 
 - **Frontend / Extension**: Manifest V3 (MV3), Vanilla ES Modules, Shadow DOM, Custom Modern CSS (Glassmorphism & Cyber Aesthetics), SVG Browser Visual Logos.
-- **Cryptography**: Web Crypto API (SubtleCrypto), PBKDF2 (100k rounds SHA-256), AES-256-GCM.
+- **Cryptography**: Web Crypto API (SubtleCrypto), PBKDF2 (600k rounds SHA-256), AES-256-GCM.
 - **Backend Sync Server**: Node.js HTTP Server (`src/server.js`), MongoDB Atlas / Local MongoDB (`switch` database).
 - **Communication**: Chrome Extensions Messaging API (`chrome.runtime.sendMessage`, `chrome.tabs.sendMessage`).
 

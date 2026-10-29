@@ -19,24 +19,29 @@ export function buildApp() {
   const app = express();
 
   app.disable('x-powered-by');
-  app.set('trust proxy', 1); // accurate req.ip behind a reverse proxy
+  // Accurate req.ip behind a reverse proxy. Configure the hop count rather
+  // than trusting every X-Forwarded-For hop (which is spoofable).
+  app.set('trust proxy', config.trustProxy);
   app.use(express.json({ limit: '12mb' }));
   app.use(securityHeaders);
   app.use(cors);
   app.use(rejectDisallowedOrigin);
 
-  // Global rate limiting
-  const globalLimiter = rateLimit({ key: 'global', limit: 100, windowMs: 15 * 60 * 1000 });
-  app.use(globalLimiter);
-
   app.get('/healthz', (_req, res) => res.json({ ok: true, ts: Date.now() }));
 
+  // Per-surface limits, not one global bucket. A sync pull every few seconds
+  // is normal; 100 requests / 15 min across the whole API is not.
+  const syncLimiter = rateLimit({ key: 'sync', limit: 1200, windowMs: 15 * 60 * 1000 });
+  const accountLimiter = rateLimit({ key: 'account', limit: 300, windowMs: 15 * 60 * 1000 });
+  const adminLimiter = rateLimit({ key: 'admin', limit: 300, windowMs: 15 * 60 * 1000 });
+  const feedbackLimiter = rateLimit({ key: 'feedback', limit: 10, windowMs: 60 * 60 * 1000 });
+
   app.use('/v1/auth', authRoutes);
-  app.use('/v1/sync', syncRoutes);
-  app.use('/v1/share', shareRoutes);
-  app.use('/v1/user', userRoutes);
-  app.use('/v1/feedback', feedbackRoutes);
-  app.use('/v1/admin', adminRoutes);
+  app.use('/v1/sync', syncLimiter, syncRoutes);
+  app.use('/v1/share', accountLimiter, shareRoutes);
+  app.use('/v1/user', accountLimiter, userRoutes);
+  app.use('/v1/feedback', feedbackLimiter, feedbackRoutes);
+  app.use('/v1/admin', adminLimiter, adminRoutes);
 
   app.use((_req, res) => res.status(404).json({ error: 'not_found' }));
 

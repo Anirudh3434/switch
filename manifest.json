@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Switch — Session Bridge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Save a site's login session on one browser and restore it on another. End-to-end encrypted — you hold the key.",
   "icons": {
     "16": "src/assets/icon-16.png",
@@ -25,21 +25,13 @@
       "128": "src/assets/icon-128.png"
     }
   },
-  "content_scripts": [
-    {
-      "matches": ["https://*/*", "http://*/*"],
-      "js": [
-        "src/content/login-detector.js",
-        "src/content/inspect-sync-animation.js",
-        "src/content/swap-animation.js"
-      ],
-      "run_at": "document_idle"
-    }
-  ],
   "web_accessible_resources": [
     {
-      "resources": ["src/assets/*"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "src/assets/browsers-sprite.png",
+        "src/assets/icon-48.png"
+      ],
+      "matches": ["https://*/*", "http://*/*"]
     }
   ]
 }

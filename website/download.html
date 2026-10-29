@@ -3,13 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Download Switch — Official Stores & Direct Packages</title>
-  <meta name="description" content="Download Switch for Google Chrome, Microsoft Edge, Brave, Mozilla Firefox, and Arc. Seamlessly bridge authenticated sessions across any browser." />
-  <link rel="icon" type="image/svg+xml" href="../src/assets/logo.svg" />
+  <title>Install Switch — Pre-release Developer Build</title>
+  <meta name="description" content="Install the pre-release Switch developer build in a Chromium browser. No extension-store listing is published yet." />
+  <link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
   <link rel="stylesheet" href="style.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
   <!-- Ambient Gradient Light Background -->
@@ -24,7 +21,7 @@
     <div class="container masthead-inner">
       <a href="index.html" class="brand-entity">
         <div class="brand-monogram">
-          <img src="../src/assets/icon-128.png" alt="Switch" class="brand-img" width="30" height="30" />
+          <img src="assets/icon-128.png" alt="Switch" class="brand-img" width="30" height="30" />
         </div>
         <span class="brand-wordmark">Switch</span>
       </a>
@@ -86,7 +83,7 @@
             </span>
             <div class="nav-row-meta">
               <span class="nav-row-title">Download for Browsers</span>
-              <span class="nav-row-sub">Chrome, Firefox, Brave &amp; Edge</span>
+              <span class="nav-row-sub">Chrome, Edge &amp; Brave (Chromium)</span>
             </div>
             <svg class="nav-row-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
           </a>
@@ -130,17 +127,13 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>
             <span>Feedback</span>
           </a>
-          <a href="admin.html" class="mobile-tool-card">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-            <span>Admin Ops</span>
-          </a>
         </div>
 
         <!-- Sleek Footer Strip -->
         <div class="mobile-drawer-footer">
           <div class="drawer-status-pill">
             <span class="status-pulse-dot"></span>
-            <span>MV3 Live &amp; Verified • v1.0.4</span>
+            <span>Pre-release build &bull; v0.2.0</span>
           </div>
         </div>
       </div>
@@ -155,7 +148,9 @@
           Download Switch for <span class="gradient-text">Your Browser</span>
         </h1>
         <p class="subpage-subtitle">
-          Engineered natively with Manifest V3. Instant installation through your browser's trusted extension store or verified developer build.
+          Switch is a pre-release Chromium extension. It is <strong>not yet
+          published</strong> in any browser store, so the only install path today
+          is loading the unpacked developer build.
         </p>
       </div>
     </section>
@@ -181,15 +176,15 @@
           </div>
 
           <div class="detected-right">
-            <a href="https://chromewebstore.google.com" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-lg" id="detectedBtn">
+            <a href="#install-dev" class="btn btn-primary btn-lg" id="detectedBtn">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/>
                 <line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
-              <span id="detectedBtnText">Add to Chrome — Free</span>
+              <span id="detectedBtnText">Developer build — load unpacked</span>
             </a>
-            <span class="store-version-tag">Manifest V3 Certified • Client AES-256</span>
+            <span class="store-version-tag">Pre-release v0.2.0 &bull; Chromium MV3 &bull; AES-256-GCM</span>
           </div>
         </div>
       </div>
@@ -199,8 +194,8 @@
     <section class="stores-grid-section">
       <div class="container">
         <div class="section-lead">
-          <h2 class="section-title">All Compatible <span class="gradient-text">Store Editions</span></h2>
-          <p class="section-p">Deploy Switch across your fleet of workstations and browsers.</p>
+          <h2 class="section-title">Supported <span class="gradient-text">Browsers</span></h2>
+          <p class="section-p">Chromium only for now. Firefox support is planned, not shipped.</p>
         </div>
 
         <div class="stores-grid">
@@ -213,16 +208,15 @@
                 </div>
                 <div>
                   <h3 class="store-card-title">Google Chrome</h3>
-                  <span class="store-card-sub">Chrome Web Store</span>
+                  <span class="store-card-sub">Primary target</span>
                 </div>
               </div>
               <p class="store-card-body">
-                Official release for Chrome 88+. Supports Google Workspace, GitHub, AWS, and modern cross-tab cookies with zero latency.
+                Built against Manifest V3 and current Chromium APIs. Load the
+                unpacked build from <code>chrome://extensions</code>.
               </p>
             </div>
-            <a href="https://chromewebstore.google.com" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">
-              <span>Get Chrome Extension</span>
-            </a>
+            <span class="status-chip status-chip-pending">Not published</span>
           </div>
 
           <!-- Card 2: Microsoft Edge -->
@@ -234,16 +228,15 @@
                 </div>
                 <div>
                   <h3 class="store-card-title">Microsoft Edge</h3>
-                  <span class="store-card-sub">Edge Add-ons Store</span>
+                  <span class="store-card-sub">Chromium</span>
                 </div>
               </div>
               <p class="store-card-body">
-                Verified package for Edge on Windows 10/11 & macOS. Seamless profile and enterprise session handoff.
+                Chromium-based, so the same unpacked build works. Individual
+                enterprise policies may restrict extension sideloading.
               </p>
             </div>
-            <a href="https://microsoftedge.microsoft.com/addons" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">
-              <span>Get Edge Add-on</span>
-            </a>
+            <span class="status-chip status-chip-pending">Not published</span>
           </div>
 
           <!-- Card 3: Brave Browser -->
@@ -255,20 +248,19 @@
                 </div>
                 <div>
                   <h3 class="store-card-title">Brave Browser</h3>
-                  <span class="store-card-sub">Chromium Native</span>
+                  <span class="store-card-sub">Chromium</span>
                 </div>
               </div>
               <p class="store-card-body">
-                Fully compatible with Brave Shields and private window environments. Retains encrypted session portability.
+                Chromium-based. Shields can block third-party cookies on some
+                sites, which may affect restore on those sites.
               </p>
             </div>
-            <a href="https://chromewebstore.google.com" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">
-              <span>Get for Brave</span>
-            </a>
+            <span class="status-chip status-chip-pending">Not published</span>
           </div>
 
-          <!-- Card 4: Mozilla Firefox -->
-          <div class="store-card">
+          <!-- Card 4: Mozilla Firefox (roadmap) -->
+          <div class="store-card" id="roadmap">
             <div>
               <div class="store-card-head">
                 <div class="store-card-icon">
@@ -276,16 +268,16 @@
                 </div>
                 <div>
                   <h3 class="store-card-title">Mozilla Firefox</h3>
-                  <span class="store-card-sub">Firefox Add-on (AMO)</span>
+                  <span class="store-card-sub">Roadmap</span>
                 </div>
               </div>
               <p class="store-card-body">
-                Packaged for Firefox Gecko engine. Fully honors Firefox multi-account containers and strict privacy protocols.
+                <strong>Not supported yet.</strong> Switch relies on Chromium
+                extension APIs and there is no Gecko build or AMO listing.
+                Treating Firefox as available would be inaccurate.
               </p>
             </div>
-            <a href="https://addons.mozilla.org" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">
-              <span>Get Firefox Add-on</span>
-            </a>
+            <span class="status-chip status-chip-planned">Planned</span>
           </div>
 
           <!-- Card 5: Arc & Vivaldi -->
@@ -296,16 +288,37 @@
                   <span class="browser-sprite-icon-lg arc-pos"></span>
                 </div>
                 <div>
-                  <h3 class="store-card-title">Arc & Vivaldi</h3>
-                  <span class="store-card-sub">Power-User Chromium</span>
+                  <h3 class="store-card-title">Arc &amp; Vivaldi</h3>
+                  <span class="store-card-sub">Chromium</span>
                 </div>
               </div>
               <p class="store-card-body">
-                Works seamlessly within Arc Spaces and Vivaldi custom tab stacks with 1-click session synchronization.
+                Chromium-based browsers that accept unpacked extensions. Not
+                separately tested in this pre-release.
               </p>
             </div>
+            <span class="status-chip status-chip-pending">Not verified</span>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- DEVELOPER INSTALL INSTRUCTIONS -->
+    <section class="container" id="install-dev" style="padding-bottom: 70px;">
+      <div class="step-card" style="max-width: 760px; margin: 0 auto;">
+        <div class="step-badge">DEV</div>
+        <h3 style="margin: 8px 0 10px;">Load the unpacked developer build</h3>
+        <ol style="line-height: 1.8; font-size: 14px;">
+          <li>Clone or download this repository to a local folder.</li>
+          <li>Open <code>chrome://extensions</code> in Chrome, Edge, or Brave.</li>
+          <li>Enable <strong>Developer mode</strong> (top right).</li>
+          <li>Choose <strong>Load unpacked</strong> and select the repository root — the folder containing <code>manifest.json</code>.</li>
+          <li>Pin Switch, open it, and set your sync server URL. The committed default is <code>http://localhost:8080</code>, which only works if you run the backend locally.</li>
+        </ol>
+        <p class="muted" style="font-size: 13px; margin-top: 12px;">
+          Unpacked builds show browser warnings about developer mode. A signed
+          store build is a future step; no store listing exists today.
+        </p>
       </div>
     </section>
   </main>
@@ -317,27 +330,24 @@
       <div class="colophon-col colophon-brand-col">
         <div class="colophon-brand-header">
           <div class="brand-monogram" style="width: 28px; height: 28px;">
-            <img src="../src/assets/icon-48.png" alt="Switch" width="20" height="20" />
+            <img src="assets/icon-48.png" alt="Switch" width="20" height="20" />
           </div>
           <span class="colophon-logo">Switch</span>
         </div>
         <p class="colophon-mission">
-          The zero-knowledge session bridge for modern multi-browser users. Move authenticated web logins between Chrome, Edge, Brave, and Firefox securely.
+          The zero-knowledge session bridge for modern multi-browser users. Move authenticated web logins between Chromium browsers securely.
         </p>
-        <div class="colophon-status-pill">
-          <span class="status-dot"></span>
-          <span>Zero Telemetry • Client Vault Active</span>
-        </div>
+
       </div>
 
       <!-- Col 2: Supported Fleet & Downloads -->
       <div class="colophon-col">
-        <h4 class="colophon-col-title">Download Stores</h4>
+        <h4 class="colophon-col-title">Install &amp; Browser Support</h4>
         <ul class="colophon-link-list">
-          <li><a href="download.html" class="colophon-link">Google Chrome Store</a></li>
-          <li><a href="download.html" class="colophon-link">Microsoft Edge Add-ons</a></li>
+          <li><a href="download.html" class="colophon-link">Google Chrome (load unpacked)</a></li>
+          <li><a href="download.html" class="colophon-link">Microsoft Edge (load unpacked)</a></li>
           <li><a href="download.html" class="colophon-link">Brave Browser (Chromium)</a></li>
-          <li><a href="download.html" class="colophon-link">Mozilla Firefox (AMO)</a></li>
+          <li><a href="download.html#roadmap" class="colophon-link">Mozilla Firefox (planned)</a></li>
           <li><a href="download.html" class="colophon-link">Arc & Vivaldi</a></li>
         </ul>
       </div>
@@ -361,7 +371,7 @@
           <li><a href="support.html" class="colophon-link">Help & Documentation</a></li>
           <li><a href="support.html#faq" class="colophon-link">Frequently Asked Questions</a></li>
           <li><a href="support.html#troubleshoot" class="colophon-link">Troubleshooting Checklist</a></li>
-          <li><a href="mailto:anigokala3@gmail.com" class="colophon-link">Email Maintainer</a></li>
+          <li><a href="mailto:contact@your-domain.example" class="colophon-link">Email Maintainer</a></li>
           <li><a href="index.html#demo" class="colophon-link">Live Session Simulator</a></li>
         </ul>
       </div>
@@ -371,7 +381,7 @@
         <h4 class="colophon-col-title">Donate & Community</h4>
         <ul class="colophon-link-list">
           <li><a href="donate.html" class="colophon-link">Donate via UPI</a></li>
-          <li><a href="donate.html" class="colophon-link">VPA: anigokala3@oksbi</a></li>
+          <li><a href="donate.html" class="colophon-link">Donation details</a></li>
           <li><a href="donate.html#qr" class="colophon-link">Scan UPI QR Code</a></li>
           <li><a href="donate.html" class="colophon-link">GPay • PhonePe • Paytm • BHIM</a></li>
           <li><a href="about.html" class="colophon-link">Manifest V3 Open Specification</a></li>
@@ -382,14 +392,16 @@
     <!-- Sub-Colophon Bottom Legal Bar -->
     <div class="container colophon-bottom">
       <div class="colophon-legal-text">
-        <span>© 2026 Switch Project. Released under MIT License. No tracking cookies, no server-side telemetry.</span>
+        <span>© 2026 Switch Project. Released under the MIT License. Optional sync stores only encrypted data; no analytics or advertising trackers.</span>
       </div>
       <div class="colophon-bottom-links">
-        <a href="about.html" class="colophon-bottom-link">Privacy Oath</a>
+        <a href="privacy.html" class="colophon-bottom-link">Privacy Policy</a>
+        <span class="bullet-sep">•</span>
+        <a href="terms.html" class="colophon-bottom-link">Terms of Service</a>
         <span class="bullet-sep">•</span>
         <a href="support.html" class="colophon-bottom-link">Support Desk</a>
         <span class="bullet-sep">•</span>
-        <a href="mailto:anigokala3@gmail.com" class="colophon-bottom-link">anigokala3@gmail.com</a>
+        <a href="mailto:contact@your-domain.example" class="colophon-bottom-link">contact@your-domain.example</a>
         <button class="back-to-top-btn" id="backToTopBtn" type="button" title="Back to top">
           <span>Top</span>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -400,6 +412,7 @@
     </div>
   </footer>
 
+  <script src="config.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

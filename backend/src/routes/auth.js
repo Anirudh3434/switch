@@ -5,8 +5,12 @@
 // dummy salt* derived from the email, so prelogin response time and body are
 // identical whether or not the account exists. Otherwise prelogin is an
 // account-enumeration oracle.
+//
+// Production policy: registration requires a verified email, password-reset
+// requests are answered identically for known and unknown addresses, and an
+// OTP is never returned in an API response.
 
-import { createHmac, scryptSync, randomInt } from 'node:crypto';
+import { createHmac, randomInt } from 'node:crypto';
 import { Router } from '../lib/router.js';
 import { ObjectId } from 'mongodb';
 import { config } from '../config.js';
@@ -25,6 +29,12 @@ import { sendMailViaSmtp, buildOtpEmailHtml } from '../lib/smtp.js';
 
 const router = Router();
 
+const DEFAULT_KDF_ITERATIONS = 600_000;
+const MIN_KDF_ITERATIONS = 100_000;
+const MAX_KDF_ITERATIONS = 2_000_000;
+const REFRESH_RACE_GRACE_MS = 30_000;
+const OTP_PURPOSES = new Set(['account verification', 'password reset']);
+
 const emailNorm = (e) => String(e || '').trim().toLowerCase();
 const validEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
@@ -36,29 +46,165 @@ function dummySalt(email) {
     .slice(0, 22);
 }
 
+function normalizeIterations(value, fallback = DEFAULT_KDF_ITERATIONS) {
+  const n = Number(value);
+  if (!Number.isInteger(n)) return fallback;
+  if (n < MIN_KDF_ITERATIONS || n > MAX_KDF_ITERATIONS) return fallback;
+  return n;
+}
+
+/** Legacy accounts were created at 60k iterations and did not store the count. */
+const iterationsFor = (user) =>
+  normalizeIterations(user?.kdfIterations, 60_000);
+
 const loginLimiter = rateLimit({ key: 'login', limit: 10, windowMs: 15 * 60 * 1000 });
 const registerLimiter = rateLimit({ key: 'register', limit: 3, windowMs: 60 * 60 * 1000 });
 const otpSendLimiter = rateLimit({ key: 'otp_send', limit: 5, windowMs: 15 * 60 * 1000 });
 const otpVerifyLimiter = rateLimit({ key: 'otp_verify', limit: 10, windowMs: 15 * 60 * 1000 });
 const forgotPasswordLimiter = rateLimit({ key: 'forgot_password', limit: 3, windowMs: 60 * 60 * 1000 });
 
-/** POST /v1/auth/otp/send — Sends 6-digit OTP via Gmail SMTP */
+/**
+ * Sends an OTP. In production an unconfigured mailer is a hard 503 — silently
+ * "simulating" delivery would lock every user out of account verification.
+ * Development logs the code to the server console, never to the response body.
+ */
+async function deliverOtp({ email, otp, purpose }) {
+  if (!config.smtpConfigured) {
+    if (config.isProd) {
+      const err = new Error('email_not_configured');
+      err.status = 503;
+      throw err;
+    }
+    console.warn(
+      `[switch] SMTP not configured. OTP for ${email} (${purpose}): ${otp}`,
+    );
+    return { simulated: true };
+  }
+
+  const isReset = purpose === 'password reset';
+  await sendMailViaSmtp({
+    host: config.smtpHost,
+    port: config.smtpPort,
+    user: config.smtpUser,
+    pass: config.smtpPass,
+    from: config.smtpFrom,
+    to: email,
+    subject: isReset ? 'Switch | Password Reset Code' : 'Switch | Verify your email',
+    html: buildOtpEmailHtml({ otp, email, purpose }),
+    text: [
+      isReset
+        ? 'Use the following code to reset your Switch Master Password:'
+        : 'Verify your email to finish signing up with Switch. Use the following code:',
+      '',
+      otp,
+      '',
+      'The verification code is valid for 10 min.',
+      '',
+      'Switch — Session Bridge',
+    ].join('\n'),
+  });
+  return { simulated: false };
+}
+
+/**
+ * Validates either a signed verification token or a direct OTP. Returns
+ * { verified, reason } and consumes the OTP on success.
+ */
+async function verifyEmailProof(email, { verificationToken, otp } = {}) {
+  if (verificationToken) {
+    const claims = verifyAccessToken(verificationToken, tokenSecret());
+    if (
+      claims &&
+      claims.type === 'email_verification' &&
+      claims.verified &&
+      emailNorm(claims.email) === email
+    ) {
+      return { verified: true };
+    }
+    return { verified: false, reason: 'invalid_verification_token' };
+  }
+
+  if (otp) {
+    const record = await otps().findOne({ email });
+    const expectedHash = sha256(String(otp).trim() + config.dummySaltSecret + email);
+    if (
+      record &&
+      record.otpHash === expectedHash &&
+      new Date(record.expiresAt) >= new Date()
+    ) {
+      await otps().deleteMany({ email });
+      return { verified: true };
+    }
+    return { verified: false, reason: 'invalid_otp' };
+  }
+
+  return { verified: false, reason: 'email_verification_required' };
+}
+
+async function issueTokens(user, deviceId = null) {
+  const access = signAccessToken(
+    {
+      sub: String(user._id),
+      email: user.email,
+      tv: user.tokenVersion || 0,
+    },
+    config.accessTtl,
+    tokenSecret(),
+  );
+  const { token, hash } = newRefreshToken();
+  await refresh().insertOne({
+    userId: String(user._id),
+    tokenHash: hash,
+    deviceId: deviceId || null,
+    createdAt: new Date(),
+    expiresAt: new Date(Date.now() + config.refreshTtl * 1000),
+    revokedAt: null,
+  });
+  return {
+    accessToken: access,
+    refreshToken: token,
+    expiresIn: config.accessTtl,
+  };
+}
+
+const publicUser = (u) => ({
+  id: String(u._id),
+  email: u.email,
+  kdfSalt: u.kdfSalt,
+  kdfIterations: iterationsFor(u),
+  createdAt: u.createdAt,
+});
+
+/** POST /v1/auth/otp/send — Sends 6-digit OTP via the configured mailer */
 router.post('/otp/send', otpSendLimiter, async (req, res) => {
   const email = emailNorm(req.body?.email);
-  const purpose = req.body?.purpose || 'account verification';
+  const purpose = String(req.body?.purpose || 'account verification');
 
   if (!validEmail(email)) {
     return res.status(400).json({ ok: false, error: 'invalid_email', message: 'Valid email address is required.' });
   }
+  if (!OTP_PURPOSES.has(purpose)) {
+    return res.status(400).json({ ok: false, error: 'invalid_purpose' });
+  }
 
-  // If purpose is password reset, verify that the account exists
+  if (!config.smtpConfigured && config.isProd) {
+    return res.status(503).json({
+      ok: false,
+      error: 'email_not_configured',
+      message: 'Email delivery is not configured. Contact the operator.',
+    });
+  }
+
+  // Password resets only make sense for existing accounts. Do not confirm or
+  // deny existence: return the same generic body either way.
   if (purpose === 'password reset') {
     const user = await users().findOne({ email });
     if (!user) {
-      return res.status(404).json({
-        ok: false,
-        error: 'user_not_found',
-        message: 'No registered Switch account found with this email address.',
+      return res.json({
+        ok: true,
+        message: 'If an account exists for that address, a reset code is on its way.',
+        expiresIn: config.otpTtl,
+        cooldown: config.otpCooldown,
       });
     }
   }
@@ -93,48 +239,24 @@ router.post('/otp/send', otpSendLimiter, async (req, res) => {
     expiresAt: new Date(Date.now() + config.otpTtl * 1000),
   });
 
-  // Send via Gmail SMTP
   try {
-    const isReset = purpose === 'password reset';
-    const mailResult = await sendMailViaSmtp({
-      host: config.smtpHost,
-      port: config.smtpPort,
-      user: config.smtpUser,
-      pass: config.smtpPass,
-      from: config.smtpFrom,
-      to: email,
-      subject: isReset ? 'Switch | Password Reset Code' : 'Switch | Otp to verify',
-      html: buildOtpEmailHtml({ otp, email, purpose }),
-      text: [
-        isReset
-          ? 'Use the following code to reset your Switch Master Password:'
-          : 'Verify your email to finish signing up with Switch. Use the following code:',
-        '',
-        otp,
-        '',
-        'The verification code is valid for 10 min.',
-        '',
-        '© 2026 Switch Technologies, Inc. All rights reserved.',
-      ].join('\n'),
-    });
-
-    const isSimulated = mailResult?.simulated;
+    const delivery = await deliverOtp({ email, otp, purpose });
     return res.json({
       ok: true,
-      message: isSimulated
-        ? 'Verification code logged to server console (SMTP not configured)'
-        : 'Verification code sent to your email address via Gmail SMTP.',
+      message: 'Verification code sent.',
       expiresIn: config.otpTtl,
       cooldown: config.otpCooldown,
-      simulated: isSimulated,
-      ...(isSimulated ? { devOtp: otp } : {}),
+      // "console" tells a developer where to look; it is never the code.
+      delivery: delivery.simulated ? 'console' : 'email',
     });
   } catch (err) {
-    console.error('[switch] Failed to send email via SMTP:', err);
-    return res.status(500).json({
+    console.error('[switch] Failed to send email:', err?.message || err);
+    await otps().deleteMany({ email }).catch(() => {});
+    const status = err?.status || 502;
+    return res.status(status).json({
       ok: false,
-      error: 'smtp_failed',
-      message: `Failed to send email via Gmail SMTP: ${err.message}`,
+      error: status === 503 ? 'email_not_configured' : 'smtp_failed',
+      message: 'Could not send the verification email. Please try again later.',
     });
   }
 });
@@ -209,28 +331,30 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req, res) => {
     return res.status(400).json({ ok: false, error: 'invalid_email', message: 'Valid email address is required.' });
   }
 
-  const user = await users().findOne({ email });
-  if (!user) {
-    return res.status(404).json({
+  if (!config.smtpConfigured && config.isProd) {
+    return res.status(503).json({
       ok: false,
-      error: 'user_not_found',
-      message: 'No registered Switch account found with this email address.',
+      error: 'email_not_configured',
+      message: 'Email delivery is not configured. Contact the operator.',
     });
   }
 
-  // Check resend cooldown
+  const generic = {
+    ok: true,
+    message: 'If an account exists for that address, a reset code is on its way.',
+    expiresIn: config.otpTtl,
+    cooldown: config.otpCooldown,
+  };
+
+  const user = await users().findOne({ email });
+  if (!user) return res.json(generic);
+
+  // Check resend cooldown. Still return the generic body so an attacker cannot
+  // use cooldown state to test whether the address exists.
   const existing = await otps().findOne({ email });
   if (existing) {
     const elapsedSeconds = Math.floor((Date.now() - new Date(existing.createdAt).getTime()) / 1000);
-    if (elapsedSeconds < config.otpCooldown) {
-      const waitTime = config.otpCooldown - elapsedSeconds;
-      return res.status(429).json({
-        ok: false,
-        error: 'cooldown_active',
-        message: `Please wait ${waitTime} seconds before requesting a new code.`,
-        retryAfter: waitTime,
-      });
-    }
+    if (elapsedSeconds < config.otpCooldown) return res.json(generic);
   }
 
   // Generate cryptographically secure 6-digit numeric OTP
@@ -248,45 +372,17 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req, res) => {
     expiresAt: new Date(Date.now() + config.otpTtl * 1000),
   });
 
-  // Send via Gmail SMTP
   try {
-    const mailResult = await sendMailViaSmtp({
-      host: config.smtpHost,
-      port: config.smtpPort,
-      user: config.smtpUser,
-      pass: config.smtpPass,
-      from: config.smtpFrom,
-      to: email,
-      subject: 'Switch | Password Reset Code',
-      html: buildOtpEmailHtml({ otp, email, purpose: 'password reset' }),
-      text: [
-        'Use the following code to reset your Switch Master Password:',
-        '',
-        otp,
-        '',
-        'The verification code is valid for 10 min.',
-        '',
-        '© 2026 Switch Technologies, Inc. All rights reserved.',
-      ].join('\n'),
-    });
-
-    const isSimulated = mailResult?.simulated;
-    return res.json({
-      ok: true,
-      message: isSimulated
-        ? 'Password reset code logged to server console (SMTP not configured)'
-        : 'Password reset code sent to your email address.',
-      expiresIn: config.otpTtl,
-      cooldown: config.otpCooldown,
-      simulated: isSimulated,
-      ...(isSimulated ? { devOtp: otp } : {}),
-    });
+    const delivery = await deliverOtp({ email, otp, purpose: 'password reset' });
+    return res.json({ ...generic, delivery: delivery.simulated ? 'console' : 'email' });
   } catch (err) {
-    console.error('[switch] Failed to send email via SMTP:', err);
-    return res.status(500).json({
+    console.error('[switch] Failed to send reset email:', err?.message || err);
+    await otps().deleteMany({ email }).catch(() => {});
+    const status = err?.status || 502;
+    return res.status(status).json({
       ok: false,
-      error: 'smtp_failed',
-      message: `Failed to send email via Gmail SMTP: ${err.message}`,
+      error: status === 503 ? 'email_not_configured' : 'smtp_failed',
+      message: 'Could not send the reset email. Please try again later.',
     });
   }
 });
@@ -294,7 +390,7 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req, res) => {
 /** POST /v1/auth/reset-password — Reset Master Password via verified token or OTP */
 router.post('/reset-password', registerLimiter, async (req, res) => {
   const email = emailNorm(req.body?.email);
-  const { newAuthHash, newKdfSalt, verificationToken, otp } = req.body || {};
+  const { newAuthHash, newKdfSalt, newKdfIterations, verificationToken, otp } = req.body || {};
 
   if (!validEmail(email)) {
     return res.status(400).json({ ok: false, error: 'invalid_email', message: 'Valid email address is required.' });
@@ -308,31 +404,15 @@ router.post('/reset-password', registerLimiter, async (req, res) => {
     return res.status(400).json({ ok: false, error: 'invalid_kdf_salt', message: 'Master password KDF salt is invalid.' });
   }
 
-  // 1. Validate email verification proof (verificationToken OR direct OTP)
-  let isVerified = false;
-  if (verificationToken) {
-    const claims = verifyAccessToken(verificationToken, tokenSecret());
-    if (claims && emailNorm(claims.email) === email && claims.verified) {
-      isVerified = true;
-    }
-  } else if (otp) {
-    const record = await otps().findOne({ email });
-    const expectedHash = sha256(String(otp).trim() + config.dummySaltSecret + email);
-    if (record && record.otpHash === expectedHash && new Date(record.expiresAt) >= new Date()) {
-      isVerified = true;
-      await otps().deleteMany({ email });
-    }
-  }
-
-  if (!isVerified) {
+  const proof = await verifyEmailProof(email, { verificationToken, otp });
+  if (!proof.verified) {
     return res.status(400).json({
       ok: false,
-      error: 'invalid_verification',
+      error: proof.reason || 'invalid_verification',
       message: 'Email verification code has expired or is invalid. Please request a new code.',
     });
   }
 
-  // 2. Locate user
   const user = await users().findOne({ email });
   if (!user) {
     return res.status(404).json({
@@ -342,28 +422,39 @@ router.post('/reset-password', registerLimiter, async (req, res) => {
     });
   }
 
-  // 3. Update master password hashes
   const updatedAuthHash = hashAuthHash(newAuthHash);
+  const nextTokenVersion = (user.tokenVersion || 0) + 1;
   await users().updateOne(
     { _id: user._id },
     {
       $set: {
         authHash: updatedAuthHash,
         kdfSalt: newKdfSalt,
+        kdfIterations: normalizeIterations(newKdfIterations),
         passwordResetAt: new Date(),
         updatedAt: new Date(),
       },
-    }
+      $inc: { tokenVersion: 1 },
+    },
   );
 
-  // 4. Invalidate all previous refresh tokens
-  await refresh().deleteMany({ userId: String(user._id) });
+  // Invalidate all previous refresh tokens and cloud sessions (they were
+  // encrypted with the old password's vault key and cannot be read).
+  await Promise.all([
+    refresh().deleteMany({ userId: String(user._id) }),
+    sessions().deleteMany({ userId: String(user._id) }),
+  ]);
 
-  // 5. Purge old encrypted cloud sessions (cannot be decrypted without old password)
-  await sessions().deleteMany({ userId: String(user._id) });
-
-  // 6. Issue fresh tokens
-  const tokens = await issueTokens({ ...user, authHash: updatedAuthHash, kdfSalt: newKdfSalt });
+  const tokens = await issueTokens(
+    {
+      ...user,
+      authHash: updatedAuthHash,
+      kdfSalt: newKdfSalt,
+      kdfIterations: normalizeIterations(newKdfIterations),
+      tokenVersion: nextTokenVersion,
+    },
+    req.get('X-Device-Id') || null,
+  );
 
   return res.json({
     ok: true,
@@ -373,46 +464,22 @@ router.post('/reset-password', registerLimiter, async (req, res) => {
   });
 });
 
-
-async function issueTokens(user) {
-  const access = signAccessToken(
-    { sub: String(user._id), email: user.email },
-    config.accessTtl,
-    tokenSecret(),
-  );
-  const { token, hash } = newRefreshToken();
-  await refresh().insertOne({
-    userId: String(user._id),
-    tokenHash: hash,
-    expiresAt: new Date(Date.now() + config.refreshTtl * 1000),
-  });
-  return {
-    accessToken: access,
-    refreshToken: token,
-    expiresIn: config.accessTtl,
-  };
-}
-
-const publicUser = (u) => ({
-  id: String(u._id),
-  email: u.email,
-  kdfSalt: u.kdfSalt,
-  createdAt: u.createdAt,
-});
-
 /** POST /v1/auth/prelogin */
 router.post('/prelogin', loginLimiter, async (req, res) => {
   const email = emailNorm(req.body?.email);
   if (!validEmail(email)) return res.status(400).json({ error: 'invalid_email' });
 
   const user = await users().findOne({ email });
-  return res.json({ kdfSalt: user?.kdfSalt || dummySalt(email) });
+  return res.json({
+    kdfSalt: user?.kdfSalt || dummySalt(email),
+    kdfIterations: user ? iterationsFor(user) : DEFAULT_KDF_ITERATIONS,
+  });
 });
 
 /** POST /v1/auth/register */
 router.post('/register', registerLimiter, async (req, res) => {
   const email = emailNorm(req.body?.email);
-  const { authHash, kdfSalt, publicKey, verificationToken, otp } = req.body || {};
+  const { authHash, kdfSalt, kdfIterations, publicKey, verificationToken, otp } = req.body || {};
 
   if (!validEmail(email)) return res.status(400).json({ error: 'invalid_email' });
   if (typeof authHash !== 'string' || authHash.length < 32)
@@ -422,19 +489,14 @@ router.post('/register', registerLimiter, async (req, res) => {
   if (publicKey && typeof publicKey !== 'string')
     return res.status(400).json({ error: 'invalid_public_key' });
 
-  // Optional OTP / Verification Token validation
-  if (verificationToken) {
-    const claims = verifyAccessToken(verificationToken, tokenSecret());
-    if (!claims || emailNorm(claims.email) !== email || !claims.verified) {
-      return res.status(400).json({ error: 'invalid_verification_token', message: 'Email verification token is invalid or expired.' });
-    }
-  } else if (otp) {
-    const record = await otps().findOne({ email });
-    const expectedHash = sha256(String(otp).trim() + config.dummySaltSecret + email);
-    if (!record || record.otpHash !== expectedHash || new Date(record.expiresAt) < new Date()) {
-      return res.status(400).json({ error: 'invalid_otp', message: 'Verification code is invalid or expired.' });
-    }
-    await otps().deleteMany({ email });
+  // Registration is closed to unverified addresses in production. The dev
+  // escape hatch is explicit and never available when NODE_ENV=production.
+  const proof = await verifyEmailProof(email, { verificationToken, otp });
+  if (!proof.verified && !config.allowUnverifiedRegistration) {
+    return res.status(400).json({
+      error: proof.reason || 'email_verification_required',
+      message: 'Verify your email address before creating an account.',
+    });
   }
 
   const existing = await users().findOne({ email });
@@ -444,14 +506,17 @@ router.post('/register', registerLimiter, async (req, res) => {
     email,
     authHash: hashAuthHash(authHash), // hashed again at rest
     kdfSalt,
+    kdfIterations: normalizeIterations(kdfIterations),
     publicKey: publicKey || null,
+    tokenVersion: 0,
+    emailVerifiedAt: proof.verified ? new Date() : null,
     createdAt: new Date(),
   };
   const { insertedId } = await users().insertOne(doc);
 
   return res.status(201).json({
     user: publicUser({ ...doc, _id: insertedId }),
-    ...(await issueTokens({ ...doc, _id: insertedId })),
+    ...(await issueTokens({ ...doc, _id: insertedId }, req.get('X-Device-Id') || null)),
   });
 });
 
@@ -470,109 +535,114 @@ router.post('/login', loginLimiter, async (req, res) => {
 
   if (!user || !ok) return res.status(401).json({ error: 'invalid_credentials' });
 
-  return res.json({ user: publicUser(user), ...(await issueTokens(user)) });
+  return res.json({
+    user: publicUser(user),
+    ...(await issueTokens(user, req.get('X-Device-Id') || null)),
+  });
 });
 
-/** POST /v1/auth/refresh — rotates the refresh token. */
+/**
+ * POST /v1/auth/refresh — rotates the refresh token.
+ *
+ * Rotation is atomic. If two tabs race, the loser gets 409 and retries with
+ * the winner's token (the client single-flights refreshes). Reusing a token
+ * that was rotated more than a grace period ago is treated as theft and
+ * revokes every refresh token on the account.
+ */
 router.post('/refresh', loginLimiter, async (req, res) => {
   const { refreshToken } = req.body || {};
   if (typeof refreshToken !== 'string')
     return res.status(400).json({ error: 'invalid_refresh_token' });
 
   const tokenHash = sha256(refreshToken);
-  const record = await refresh().findOne({ tokenHash, revokedAt: null });
+  const record = await refresh().findOne({ tokenHash });
   if (!record || record.expiresAt < new Date())
     return res.status(401).json({ error: 'invalid_refresh_token' });
 
-  // Rotation: burn the old token the moment it's used.
-  await refresh().updateOne(
-    { _id: record._id },
+  if (record.revokedAt) {
+    const age = Date.now() - new Date(record.revokedAt).getTime();
+    if (age < REFRESH_RACE_GRACE_MS) {
+      res.set('Retry-After', '1');
+      return res.status(409).json({ error: 'refresh_in_progress', retryAfterSeconds: 1 });
+    }
+    // Old token replayed well after rotation: assume compromise.
+    await refresh().updateMany(
+      { userId: record.userId, revokedAt: null },
+      { $set: { revokedAt: new Date() } },
+    );
+    return res.status(401).json({ error: 'invalid_refresh_token' });
+  }
+
+  // Claim the token atomically. Exactly one concurrent request wins.
+  const claimed = await refresh().findOneAndUpdate(
+    { _id: record._id, revokedAt: null },
     { $set: { revokedAt: new Date() } },
   );
+  if (!claimed) {
+    res.set('Retry-After', '1');
+    return res.status(409).json({ error: 'refresh_in_progress', retryAfterSeconds: 1 });
+  }
 
-  // `record.userId` was stored as a string (see issueTokens), so it must be
-  // converted back. `{ $oid: ... }` is Extended JSON *serialization* syntax,
-  // not a query operator — MongoDB rejects it with "unknown operator: $oid".
   let userId;
   try {
     userId = new ObjectId(record.userId);
   } catch {
-    // Malformed userId in the refresh record: treat as an invalid token.
     return res.status(401).json({ error: 'invalid_refresh_token' });
   }
 
   const user = await users().findOne({ _id: userId });
   if (!user) return res.status(401).json({ error: 'invalid_refresh_token' });
 
-  return res.json(await issueTokens(user));
+  return res.json(await issueTokens(user, record.deviceId || null));
 });
 
-/** POST /v1/auth/logout */
+/**
+ * POST /v1/auth/logout — ends THIS browser's server session.
+ *
+ * Signing out must never delete another device's synced sessions. Data
+ * deletion is a separate, explicit action (`DELETE /v1/user/account`).
+ */
 router.post('/logout', async (req, res) => {
-  const { refreshToken, clearSyncData = true, deviceId: bodyDeviceId } = req.body || {};
+  const { refreshToken, clearSyncData = false, deviceId: bodyDeviceId } = req.body || {};
 
-  // Extract userId from Authorization header if present
   let userId = null;
   const header = req.get('Authorization') || '';
   const [scheme, token] = header.split(' ');
   if (scheme === 'Bearer' && token) {
     try {
       const claims = verifyAccessToken(token, tokenSecret());
-      if (claims?.sub) userId = claims.sub;
-    } catch (e) {
-      // Ignore token verification errors on logout
+      if (claims?.sub && claims.type !== 'email_verification') userId = claims.sub;
+    } catch {
+      // Logout is best-effort; never fail because the access token expired.
     }
   }
 
-  // If not found from access token, locate userId from refreshToken hash
   if (!userId && typeof refreshToken === 'string' && refreshToken.length > 0) {
-    const tokenHash = sha256(refreshToken);
-    const rec = await refresh().findOne({ tokenHash });
-    if (rec?.userId) {
-      userId = rec.userId;
-    }
+    const rec = await refresh().findOne({ tokenHash: sha256(refreshToken) });
+    if (rec?.userId) userId = rec.userId;
   }
 
   const deviceId = req.get('X-Device-Id') || bodyDeviceId;
 
-  // Revoke/delete refresh token records
+  // Revoke only the refresh token presented by this browser.
   if (typeof refreshToken === 'string' && refreshToken.length > 0) {
-    try {
-      await refresh().updateMany(
-        { tokenHash: sha256(refreshToken) },
+    await refresh()
+      .updateOne(
+        { tokenHash: sha256(refreshToken), revokedAt: null },
         { $set: { revokedAt: new Date() } },
-      );
-    } catch (e) {
-      // Ignore errors
-    }
+      )
+      .catch(() => {});
   }
-  
-  if (userId) {
-    try {
-      await refresh().deleteMany({ userId });
-    } catch (e) {
-      // Ignore errors
-    }
 
-    // 1. Delete device info from database
-    try {
-      if (deviceId) {
-        await devices().deleteOne({ userId, deviceId });
-      } else {
-        await devices().deleteMany({ userId });
-      }
-    } catch (e) {
-      // Ignore errors
-    }
+  if (userId && deviceId) {
+    // Remove the device listing but leave its encrypted sessions intact.
+    await devices().deleteOne({ userId, deviceId }).catch(() => {});
+  }
 
-    // 2. Delete all cookies and tokens stored in database for this user if requested
-    if (clearSyncData) {
-      try {
-        await sessions().deleteMany({ userId });
-      } catch (e) {
-        // Ignore errors
-      }
-    }
+  // Opt-in only. Kept for backwards compatibility with old clients, but the
+  // current client never sends true.
+  if (userId && clearSyncData === true) {
+    await sessions().deleteMany({ userId }).catch(() => {});
   }
 
   res.status(204).end();

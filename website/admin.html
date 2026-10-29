@@ -1,39 +1,111 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="cyber">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Switch — Admin Console [Retro Workstation]</title>
-  <meta name="description" content="Switch administrative console with retro white-grey workstation theme. Manage user feedback, devices, and session telemetry." />
-  <link rel="icon" type="image/svg+xml" href="../src/assets/logo.svg" />
+  <title>Switch — Admin Console [Cyber Command Deck]</title>
+  <meta name="description" content="Switch administrative console. Monitor encrypted session envelopes, fleet devices, user counts, and feedback." />
+  <link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
   <link rel="stylesheet" href="admin.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
 
-  <!-- Top Retro Workstation Menu Bar -->
+  <!-- AUTHENTICATION GATE
+       The admin console is not public. Sign in with a Switch account whose
+       email is listed in the server's ADMIN_EMAILS allowlist. Tokens live in
+       sessionStorage and are cleared when this tab closes. -->
+  <div class="admin-auth-gate" id="adminAuthGate" hidden>
+    <form class="admin-auth-card" id="adminAuthForm" autocomplete="off">
+      <div class="admin-auth-brand">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <div>
+          <h1>Switch Admin</h1>
+          <p>Authorized operators only</p>
+        </div>
+      </div>
+
+      <p class="admin-auth-copy">
+        This console calls an authenticated API. Use a normal Switch account that
+        the server operator has added to <code>ADMIN_EMAILS</code>. There is no
+        shared admin password.
+      </p>
+
+      <label for="adminAuthServer">Sync server URL</label>
+      <input type="url" id="adminAuthServer" class="admin-auth-input" placeholder="http://localhost:8080" spellcheck="false" required />
+
+      <label for="adminAuthEmail">Operator email</label>
+      <input type="email" id="adminAuthEmail" class="admin-auth-input" placeholder="you@example.com" autocomplete="username" required />
+
+      <label for="adminAuthPassword">Master password</label>
+      <input type="password" id="adminAuthPassword" class="admin-auth-input" placeholder="Vault encryption password" autocomplete="current-password" required />
+
+      <p class="admin-auth-error" id="adminAuthError" style="display:none;" role="alert"></p>
+
+      <button type="submit" class="retro-btn action-highlight admin-auth-submit" id="adminAuthSubmit">Sign in</button>
+
+      <p class="admin-auth-note">
+        Only the derived auth hash is transmitted; the password never leaves this
+        browser. If <code>ADMIN_EMAILS</code> is empty, the server disables this
+        console entirely.
+      </p>
+    </form>
+  </div>
+
+  <!-- Top Cyber Command / Retro Workstation Menu Bar -->
   <header class="retro-menu-bar">
     <div class="menu-brand-cluster">
-      <span class="retro-apple-icon" aria-hidden="true">🖥️</span>
-      <span class="menu-brand-title">Switch Core Console v2.4</span>
+      <span class="retro-apple-icon" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--retro-cyan-glow)" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </span>
+      <span class="menu-brand-title">Switch Core Admin</span>
       <nav class="menu-nav-links">
         <a href="index.html" class="menu-item-link">← Website</a>
         <a href="support.html" class="menu-item-link">Support Desk</a>
-        <a href="support.html#feedback" class="menu-item-link">User Feedback Form</a>
       </nav>
     </div>
 
     <div class="menu-telemetry-cluster">
-      <div class="led-indicator" title="Server API Status">
-        <span class="led-bulb led-green"></span>
-        <span>SYS_NOMINAL</span>
+      <!-- Operator identity + sign out -->
+      <span class="admin-identity" id="adminIdentity"></span>
+      <button type="button" class="retro-btn" id="adminSignOutBtn" title="Sign out of the admin console" hidden>Sign out</button>
+
+      <!-- PII reveal (audited server-side) -->
+      <label class="admin-reveal-toggle" title="Requests unmasked emails; the server records this in the audit log">
+        <input type="checkbox" id="revealPiiToggle" />
+        <span>Unmask PII</span>
+      </label>
+
+      <!-- Theme Switcher -->
+      <button type="button" class="theme-toggle-btn" id="themeToggleBtn" title="Toggle Theme (Cyber Deck / Retro Workstation)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <span id="themeToggleLabel">Cyber Deck</span>
+      </button>
+
+      <!-- Auto Refresh Controller -->
+      <div class="auto-refresh-pill" title="Auto-Refresh Interval">
+        <span class="pulse-dot active" id="refreshPulseDot"></span>
+        <select id="autoRefreshSelect" class="retro-select" title="Set refresh rate">
+          <option value="5">Auto: 5s</option>
+          <option value="10" selected>Auto: 10s</option>
+          <option value="30">Auto: 30s</option>
+          <option value="0">Auto: Off</option>
+        </select>
       </div>
-      <div class="led-indicator" title="MongoDB Connection">
-        <span class="led-bulb led-amber"></span>
+
+      <!-- Quick Ping Badge -->
+      <button type="button" class="ping-pill-btn" id="quickPingBtn" title="Test API Latency">
+        <span class="led-bulb led-cyan"></span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        <span id="quickPingLabel">PING: --ms</span>
+      </button>
+
+      <!-- DB Status Indicator -->
+      <div class="led-indicator" title="MongoDB Connection Status">
+        <span class="led-bulb led-green" id="dbLedBulb"></span>
         <span id="dbStatusLabel">DB_CONNECTED</span>
       </div>
+
+      <!-- Digital Clock -->
       <div class="retro-clock" id="systemClock">00:00:00</div>
     </div>
   </header>
@@ -45,7 +117,7 @@
       <div class="retro-window-header">
         <div class="window-title-group">
           <div class="pinstripe-texture" aria-hidden="true"></div>
-          <span class="window-title-text">Workstation: /sys/switch/admin/control.panel</span>
+          <span class="window-title-text">Workstation: /sys/switch/admin/control.panel [ZERO_KNOWLEDGE_VAULT]</span>
         </div>
         <div class="window-controls-retro">
           <button type="button" class="window-btn-square" id="winBtnMinimize" title="Minimize / Toggle System Specs Banner">_</button>
@@ -59,13 +131,14 @@
         <div class="system-mission-box">
           <h1 class="system-mission-title">SWITCH // ZERO-KNOWLEDGE ADMINISTRATIVE CONSOLE</h1>
           <p class="system-mission-desc">
-            Administrative monitoring for cross-browser encrypted session envelopes, device check-ins, and incoming bug reports, improvements & community suggestions.
+            Administrative monitoring for cross-browser encrypted session envelopes, device check-ins, user accounts, and incoming community feedback.
           </p>
           <div class="system-specs-strip">
             <span class="spec-badge">NODE: <strong id="specNodeVersion">v22.x</strong></span>
             <span class="spec-badge">PLATFORM: <strong id="specPlatform">win32 x64</strong></span>
             <span class="spec-badge">UPTIME: <strong id="specUptime">0h 0m</strong></span>
-            <span class="spec-badge">MEMORY: <strong id="specMemory">0 MB</strong></span>
+            <span class="spec-badge">RAM RSS: <strong id="specMemory">0 MB</strong></span>
+            <span class="spec-badge">HEAP: <strong id="specHeap">0 MB</strong></span>
             <span class="spec-badge">CIPHER: <strong>AES-256-GCM / PBKDF2</strong></span>
           </div>
         </div>
@@ -77,10 +150,10 @@
   `--. \ | | | | | __/ __| '_ \ 
  /\__/ / | | | | | || (__| | | |
  \____/ \__,_|_|_|\__\___|_| |_|
- [ RETRO WORKSTATION TERMINAL ]</pre>
+ [ ZERO-KNOWLEDGE ENCLAVE ACTIVE ]</pre>
       </div>
 
-      <!-- Retro Metrics Gauges Row -->
+      <!-- Metrics Gauges Row (5 Real-Time Gauges) -->
       <div class="retro-metrics-grid">
         <!-- Metric 1: Users -->
         <div class="metric-gauge-card">
@@ -95,14 +168,14 @@
         </div>
 
         <!-- Metric 2: Sessions -->
-        <div class="metric-gauge-card">
+        <div class="metric-gauge-card" id="gaugeCardSessions" style="cursor: pointer;" title="Click to view Sessions Vault">
           <div class="gauge-header-row">
             <span class="gauge-label">Active Sessions</span>
-            <span class="gauge-sub-pill">Envelopes</span>
+            <span class="gauge-sub-pill pulse-badge">Encrypted</span>
           </div>
-          <div class="gauge-display-value" id="gaugeSessionsCount">--</div>
+          <div class="gauge-display-value accent-cyan" id="gaugeSessionsCount">--</div>
           <div class="gauge-footer-note">
-            <span>Encrypted at rest</span>
+            <span>Storage:</span> <strong id="gaugeSessionsBytes">~0 KB sealed</strong>
           </div>
         </div>
 
@@ -114,7 +187,7 @@
           </div>
           <div class="gauge-display-value" id="gaugeDevicesCount">--</div>
           <div class="gauge-footer-note">
-            <span>Chrome • Edge • Firefox</span>
+            <span id="gaugeDevicesBreakdown">Chrome • Edge • Brave</span>
           </div>
         </div>
 
@@ -129,47 +202,119 @@
             <span id="gaugeFeedbackBreakdown">0 bugs • 0 ideas</span>
           </div>
         </div>
+
+        <!-- Metric 5: System Memory & Health -->
+        <div class="metric-gauge-card">
+          <div class="gauge-header-row">
+            <span class="gauge-label">System Health</span>
+            <span class="gauge-sub-pill" id="healthStatusBadge">NOMINAL</span>
+          </div>
+          <div class="gauge-display-value" id="gaugeRamPercent">--</div>
+          <div class="gauge-footer-note">
+            <div class="memory-progress-track">
+              <div class="memory-progress-bar" id="memoryProgressBar" style="width: 25%;"></div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <!-- Retro Folder Tab Navigation -->
+      <!-- Tab Navigation Bar (5 Tabs with Crisp SVG Icons) -->
       <div class="retro-tabs-bar" role="tablist">
-        <button type="button" class="retro-tab-btn active" data-tab="feedback" role="tab" aria-selected="true">
-          <span>💬 Feedback Inbox</span>
+        <button type="button" class="retro-tab-btn active" data-tab="sessions" role="tab" aria-selected="true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span>Sessions Vault</span>
+          <span class="tab-count-pill" id="tabBadgeSessions">0</span>
+        </button>
+        <button type="button" class="retro-tab-btn" data-tab="feedback" role="tab" aria-selected="false">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>Feedback Inbox</span>
           <span class="tab-count-pill" id="tabBadgeFeedback">0</span>
         </button>
         <button type="button" class="retro-tab-btn" data-tab="users" role="tab" aria-selected="false">
-          <span>👤 Users Directory</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>Users Directory</span>
           <span class="tab-count-pill" id="tabBadgeUsers">0</span>
         </button>
         <button type="button" class="retro-tab-btn" data-tab="devices" role="tab" aria-selected="false">
-          <span>💻 Connected Devices</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          <span>Connected Devices</span>
           <span class="tab-count-pill" id="tabBadgeDevices">0</span>
         </button>
         <button type="button" class="retro-tab-btn" data-tab="terminal" role="tab" aria-selected="false">
-          <span>⚙️ System Logs & Tools</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          <span>System Diagnostics & Tools</span>
         </button>
       </div>
 
-      <!-- TAB 1: FEEDBACK INBOX (Bug, Improvement, Suggestion Management) -->
-      <div class="retro-tab-pane" id="tabPaneFeedback" role="tabpanel">
-        <!-- Toolbar Strip -->
+      <!-- TAB 1: SESSIONS VAULT (View 330+ Real Encrypted Sessions) -->
+      <div class="retro-tab-pane" id="tabPaneSessions" role="tabpanel">
+        <div class="retro-toolbar-row">
+          <div class="retro-filter-group">
+            <span class="gauge-label">Encrypted Envelopes (Zero-Knowledge Ciphertext)</span>
+            <span class="tag-pill-dim" id="sessionsSummaryPill">Loading sessions...</span>
+          </div>
+          <div class="retro-search-wrap">
+            <input type="text" id="sessionSearchInput" class="retro-input-text" placeholder="Filter by host (e.g. google.com, stripe)..." />
+            <button type="button" id="refreshSessionsBtn" class="retro-btn" title="Refresh Sessions">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              <span>Refresh</span>
+            </button>
+            <button type="button" id="exportSessionsCsvBtn" class="retro-btn" title="Export Sessions as CSV">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Export CSV</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="retro-table-container">
+          <table class="retro-table">
+            <thead>
+              <tr>
+                <th style="width: 240px;">Target Host Domain</th>
+                <th style="width: 140px;">Payload Size</th>
+                <th style="width: 90px;">Version</th>
+                <th style="width: 180px;">Device ID</th>
+                <th style="width: 170px;">Last Synced</th>
+                <th style="width: 140px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="sessionsTableBody">
+              <tr>
+                <td colspan="6" class="table-empty-row">Loading active encrypted sessions from MongoDB...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB 2: FEEDBACK INBOX -->
+      <div class="retro-tab-pane hidden" id="tabPaneFeedback" role="tabpanel">
         <div class="retro-toolbar-row">
           <div class="retro-filter-group">
             <button type="button" class="retro-filter-pill active" data-filter="all">All Feedback</button>
-            <button type="button" class="retro-filter-pill" data-filter="bug">🐞 Bugs (<span id="countPillBug">0</span>)</button>
-            <button type="button" class="retro-filter-pill" data-filter="improvement">🚀 Improvements (<span id="countPillImprovement">0</span>)</button>
-            <button type="button" class="retro-filter-pill" data-filter="suggestion">💡 Suggestions (<span id="countPillSuggestion">0</span>)</button>
+            <button type="button" class="retro-filter-pill" data-filter="bug">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect width="8" height="14" x="8" y="6" rx="4"/><path d="m19 7-3 2"/><path d="m5 7 3 2"/><path d="m19 19-3-2"/><path d="m5 19 3-2"/><path d="M20 13h-4"/><path d="M4 13h4"/></svg>
+              <span>Bugs (<span id="countPillBug">0</span>)</span>
+            </button>
+            <button type="button" class="retro-filter-pill" data-filter="improvement">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <span>Improvements (<span id="countPillImprovement">0</span>)</span>
+            </button>
+            <button type="button" class="retro-filter-pill" data-filter="suggestion">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5.76.76 1.23 1.52 1.41 2.5"/></svg>
+              <span>Suggestions (<span id="countPillSuggestion">0</span>)</span>
+            </button>
           </div>
 
           <div class="retro-search-wrap">
             <input type="text" id="feedbackSearchInput" class="retro-input-text" placeholder="Search description, email, or type..." />
             <button type="button" id="refreshFeedbackBtn" class="retro-btn">
-              <span>⟳ Refresh</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              <span>Refresh</span>
             </button>
           </div>
         </div>
 
-        <!-- Table of Feedback -->
         <div class="retro-table-container">
           <table class="retro-table">
             <thead>
@@ -178,20 +323,20 @@
                 <th>Feedback Description</th>
                 <th style="width: 180px;">Submitter</th>
                 <th style="width: 140px;">Timestamp</th>
-                <th style="width: 100px;">Status</th>
-                <th style="width: 130px;">Actions</th>
+                <th style="width: 110px;">Status</th>
+                <th style="width: 150px;">Actions</th>
               </tr>
             </thead>
             <tbody id="feedbackTableBody">
               <tr>
-                <td colspan="6" class="table-empty-row">Loading feedback items from vault database...</td>
+                <td colspan="6" class="table-empty-row">Loading feedback items from database...</td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      <!-- TAB 2: USERS DIRECTORY -->
+      <!-- TAB 3: USERS DIRECTORY -->
       <div class="retro-tab-pane hidden" id="tabPaneUsers" role="tabpanel">
         <div class="retro-toolbar-row">
           <div class="retro-filter-group">
@@ -200,7 +345,12 @@
           <div class="retro-search-wrap">
             <input type="text" id="userSearchInput" class="retro-input-text" placeholder="Filter by email or user ID..." />
             <button type="button" id="refreshUsersBtn" class="retro-btn">
-              <span>⟳ Refresh</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              <span>Refresh</span>
+            </button>
+            <button type="button" id="exportUsersCsvBtn" class="retro-btn" title="Export Users as CSV">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Export CSV</span>
             </button>
           </div>
         </div>
@@ -209,22 +359,23 @@
           <table class="retro-table">
             <thead>
               <tr>
-                <th style="width: 220px;">User ID</th>
+                <th style="width: 230px;">User ID</th>
                 <th>Account Email</th>
-                <th style="width: 170px;">Public Key Status</th>
-                <th style="width: 180px;">Registered Date</th>
+                <th style="width: 180px;">Public Key Status</th>
+                <th style="width: 170px;">Registered Date</th>
+                <th style="width: 110px;">Actions</th>
               </tr>
             </thead>
             <tbody id="usersTableBody">
               <tr>
-                <td colspan="4" class="table-empty-row">Loading user records...</td>
+                <td colspan="5" class="table-empty-row">Loading user records...</td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      <!-- TAB 3: CONNECTED DEVICES -->
+      <!-- TAB 4: CONNECTED DEVICES -->
       <div class="retro-tab-pane hidden" id="tabPaneDevices" role="tabpanel">
         <div class="retro-toolbar-row">
           <div class="retro-filter-group">
@@ -233,7 +384,8 @@
           <div class="retro-search-wrap">
             <input type="text" id="deviceSearchInput" class="retro-input-text" placeholder="Filter devices or browsers..." />
             <button type="button" id="refreshDevicesBtn" class="retro-btn">
-              <span>⟳ Refresh</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              <span>Refresh</span>
             </button>
           </div>
         </div>
@@ -242,36 +394,65 @@
           <table class="retro-table">
             <thead>
               <tr>
-                <th style="width: 200px;">Device ID</th>
-                <th>Device Name</th>
-                <th style="width: 160px;">System Fingerprint</th>
-                <th style="width: 180px;">Last Active</th>
+                <th style="width: 220px;">Device ID</th>
+                <th>Device Name & Browser</th>
+                <th style="width: 170px;">Profile ID</th>
+                <th style="width: 170px;">Last Active</th>
+                <th style="width: 110px;">Actions</th>
               </tr>
             </thead>
             <tbody id="devicesTableBody">
               <tr>
-                <td colspan="4" class="table-empty-row">Loading active devices...</td>
+                <td colspan="5" class="table-empty-row">Loading active devices...</td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      <!-- TAB 4: SYSTEM LOGS & DIAGNOSTICS -->
+      <!-- TAB 5: SYSTEM DIAGNOSTICS & TOOLS -->
       <div class="retro-tab-pane hidden" id="tabPaneTerminal" role="tabpanel">
+        <!-- Diagnostic Actions Bar -->
         <div class="retro-toolbar-row">
           <div class="retro-filter-group">
-            <button type="button" id="pingServerBtn" class="retro-btn">
-              <span>⚡ Execute Ping</span>
+            <button type="button" id="pingServerBtn" class="retro-btn action-highlight">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span>Execute Ping</span>
+            </button>
+            <button type="button" id="resetRateLimitsBtn" class="retro-btn" title="Clear all IP and client rate limit windows">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+              <span>Reset Rate Limits</span>
             </button>
             <button type="button" id="exportAuditBtn" class="retro-btn">
-              <span>📥 Export JSON Audit</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Export JSON Audit</span>
             </button>
             <button type="button" id="clearLogBtn" class="retro-btn">
-              <span>✕ Clear Console</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              <span>Clear Console</span>
             </button>
           </div>
           <span class="gauge-sub-pill" id="terminalStatusPill">CONSOLE_STREAM: ACTIVE</span>
+        </div>
+
+        <!-- Resource Telemetry Strip -->
+        <div class="diagnostics-summary-bar">
+          <div class="diag-item">
+            <span class="diag-label">Process Memory (RSS)</span>
+            <strong class="diag-val" id="diagMemoryRss">-- MB</strong>
+          </div>
+          <div class="diag-item">
+            <span class="diag-label">V8 Heap Allocation</span>
+            <strong class="diag-val" id="diagHeapUsed">-- MB</strong>
+          </div>
+          <div class="diag-item">
+            <span class="diag-label">System Uptime</span>
+            <strong class="diag-val" id="diagUptime">--</strong>
+          </div>
+          <div class="diag-item">
+            <span class="diag-label">Active Database</span>
+            <strong class="diag-val" id="diagDatabase">MongoDB</strong>
+          </div>
         </div>
 
         <!-- CRT Terminal Console -->
@@ -293,11 +474,37 @@
     <div class="status-right-links">
       <a href="index.html" class="status-link">Switch Homepage</a>
       <span>•</span>
-      <a href="support.html" class="status-link">Help & Support</a>
+      <a href="support.html" class="status-link">Help &amp; Support</a>
       <span>•</span>
-      <a href="donate.html" class="status-link">Donate via UPI</a>
+      <a href="donate.html" class="status-link">Support the project</a>
     </div>
   </footer>
+
+  <!-- Detail Inspection Modal (Slide-up Glassmorphic Inspector) -->
+  <div class="admin-modal-backdrop" id="inspectModal" aria-hidden="true">
+    <div class="admin-modal-dialog" role="dialog" aria-modal="true">
+      <div class="admin-modal-header">
+        <div class="modal-title-cluster">
+          <span class="modal-badge" id="modalCategoryBadge">INSPECT</span>
+          <h3 class="modal-title" id="modalTitle">Record Details</h3>
+        </div>
+        <button type="button" class="modal-close-btn" id="modalCloseBtn" aria-label="Close dialog">✕</button>
+      </div>
+      <div class="admin-modal-body" id="modalBodyContent">
+        <!-- Dynamic inspection payload rendered here -->
+      </div>
+      <div class="admin-modal-footer">
+        <button type="button" class="retro-btn" id="modalCopyJsonBtn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span>Copy JSON</span>
+        </button>
+        <button type="button" class="retro-btn action-highlight" id="modalDoneBtn">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="adminToastContainer" aria-live="polite"></div>
 
   <script src="admin.js"></script>
 </body>

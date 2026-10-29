@@ -1,42 +1,96 @@
-# Privacy Policy — Switch
+# Privacy — Switch (developer summary)
 
-_Last updated: [DATE]_
+**Last updated:** 28 October 2026
+
+This is the short, technical summary for contributors and reviewers. The
+user-facing policy is [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md); if the two
+disagree, the user-facing policy controls and this file is the bug.
 
 ## What Switch accesses
 
-Switch is a session-bridge extension. To work, it needs access to:
+Switch is a session-bridge extension. It requests access **per origin**, through
+the browser's permission prompt:
 
-- **Cookies** for the specific websites you explicitly grant, via the browser's
-  own permission prompt.
-- **localStorage** for those same websites, read by a content script that runs
-  only on origins you have granted.
+- **Cookies** for origins you grant, read only when you explicitly save, restore
+  or synchronise a session.
+- **`localStorage` and comparable web storage** for the same origins, read at the
+  same moments by a content script registered for that origin only.
 
-Switch does **not** request host permissions for all websites at install time.
-Access is requested per-origin, when you click "Give access to this site".
+Switch does not request `<all_urls>` at install time, does not read passwords,
+form input, page content, or sites you have not granted, and does not use a
+hardware fingerprint.
 
-## What Switch stores
+## What Switch stores on your device
 
-- Session snapshots (cookies + localStorage) are stored **on your device**, in
-  the browser's extension storage.
-- Snapshots you export are **encrypted on your device** before they leave it.
-  The encryption key is derived from a password only you know.
+- **Session snapshots:** cookies and storage keys for granted sites, stored in
+  `chrome.storage.local`.
+  - New snapshots are **encrypted at rest** with the vault key and host-bound
+    additional authenticated data.
+  - Legacy plaintext snapshots are re-sealed the first time they are read.
+  - If the vault is locked, reads fail with `vault_locked`; they do not fall back
+    to plaintext.
+- **Vault key:** in `chrome.storage.session`. It is cleared when the browser
+  session ends and on sign-out. It is never written to persistent storage.
+- **Consent record:** version, timestamp, data categories and a capped history.
+- **Local identifiers:** a random `deviceId`, a random per-profile `systemId`,
+  the granted-host list, and UI preferences.
+
+Signing out clears the vault key and local plaintext caches. Account deletion
+(separate, explicit, confirmed) removes local snapshots as well.
 
 ## What Switch transmits
 
-- **Nothing, in the current version.** There is no Switch server. Export and
-  import use a local file that you move between browsers however you like.
+Nothing is transmitted unless **you** trigger it.
 
-## What we can and cannot see
+- **Manual sync / explicit push:** uploads encrypted envelopes for the hosts you
+  selected. There is no automatic "push everything" after login, registration,
+  password reset, or opening the popup.
+- **Optional auto-sync:** off by default. When enabled it requires current
+  consent, an authenticated session, an unlocked vault, and a granted host. It
+  only touches hosts you granted.
+- **Account operations:** email verification, sign-in, device registration, and
+  feedback you submit.
 
-We cannot decrypt your snapshots. If a future version adds cloud sync, the
-server stores only ciphertext and account metadata. We will never hold the
-encryption key.
+Uploaded envelopes are AES-256-GCM ciphertext. The server has no key and no
+decryption path.
 
-## Data retention & deletion
+## What the server stores
 
-All snapshots live on your device. Deleting a snapshot from the UI removes it
-from extension storage immediately.
+- Account: email, scrypt-hashed `authHash`, KDF salt and iteration count,
+  optional public key, `tokenVersion`.
+- Sync: `host`, encrypted `envelope`, `version`, timestamps, tombstone flag,
+  random `deviceId`, device label, and the server-side `userId`.
+- Devices: random `deviceId`, random `systemId`, human label, coarse
+  `browser` / `browserMajorVersion` / `os`, `lastSeenAt`.
+- Auth: refresh-token hashes with TTL, OTP hashes with TTL.
+- Shares: sender/recipient ids, host, wrapped key, acceptance state.
+- Feedback: type, description, optional email. **No IP address, no user-agent.**
+
+The server does **not** store the master password, encryption key, plaintext
+cookies, full user-agent string, browsing history, or feedback IP addresses.
+IP addresses are processed transiently for rate limiting and are not written to
+the application database.
+
+## Admin console
+
+The admin API is authenticated and allowlisted (`ADMIN_EMAILS`). With no
+allowlist configured, the entire surface returns 403 instead of falling open.
+Emails and device identifiers are masked by default; requesting unmasked values
+(`reveal=1`) is recorded in the admin audit log. Admins can never decrypt
+session envelopes.
+
+## Retention and deletion
+
+- Refresh tokens and OTPs expire through TTL indexes.
+- Synced deletions are tombstones, which carry no payload.
+- Reinstalling creates a new random `deviceId`. If you explicitly merge the
+  previous install, its encrypted session copies move to the current device and
+  the duplicate device record is deleted. Merging never decrypts anything.
+- Account deletion removes the account, encrypted sessions, devices, refresh
+  tokens, OTPs, recovery keys and shares.
+- Feedback is retained until reviewed, then deleted.
 
 ## Contact
 
-[EMAIL]
+Privacy: [PRIVACY EMAIL — TO BE CONFIGURED]
+Security: [SECURITY EMAIL — TO BE CONFIGURED]

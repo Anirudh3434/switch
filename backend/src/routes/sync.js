@@ -6,8 +6,12 @@
 // returns the winning record with `status: 'conflict'` and the newer envelope,
 // so the client can decide (auto-adopt, or ask the user).
 //
-// This beats naive "just overwrite" because a laptop that was offline for a
-// week cannot silently clobber a fresher session from your phone.
+// There is deliberately no `force` escape hatch: a stale device must not be
+// able to silently clobber a newer session just because it asked nicely.
+//
+// DELETES ARE TOMBSTONES. A hard delete is invisible to other devices, so the
+// deleted session simply reappears on the next pull. A tombstone carries a
+// version like any other write.
 
 import { Router } from '../lib/router.js';
 import { config } from '../config.js';
@@ -20,18 +24,32 @@ router.use(requireAuth, touchDevice);
 // Rough plaintext-equivalent ceiling per envelope. Ciphertext is ~1.33x the
 // plaintext with base64 + GCM tag, so we size accordingly.
 const MAX_ENVELOPE_BYTES = 8 * 1024 * 1024;
+const MAX_PULL_LIMIT = 500;
 
 function validateEnvelope(env) {
   if (!env || typeof env !== 'object') return 'envelope_required';
   if (typeof env.iv !== 'string' || typeof env.data !== 'string')
     return 'malformed_envelope';
+  if (env.v !== undefined && env.v !== 1 && env.v !== 2)
+    return 'unsupported_envelope_version';
   if (Buffer.byteLength(env.data, 'base64') > MAX_ENVELOPE_BYTES)
     return 'envelope_too_large';
   return null;
 }
 
+const normalizeHost = (h) =>
+  String(h || '').replace(/^\./, '').toLowerCase().trim();
+
 const validHost = (h) =>
-  typeof h === 'string' && h.length > 0 && h.length <= 253 && /^[a-z0-9.-]+$/i.test(h);
+  typeof h === 'string' &&
+  h.length > 0 &&
+  h.length <= 253 &&
+  /^[a-z0-9.-]+$/i.test(h);
+
+const envelopeBytes = (env) =>
+  env && typeof env.data === 'string'
+    ? Buffer.byteLength(env.data, 'base64')
+    : 0;
 
 /** POST /v1/sync/push — batch upsert. */
 router.post('/push', async (req, res) => {
@@ -47,71 +65,117 @@ router.post('/push', async (req, res) => {
   }
 
   const userId = req.user.id;
-  const results = [];
+  const headerDeviceId = req.get('X-Device-Id');
+
+  // ── Phase 1: resolve current state and enforce the account budget before
+  // writing anything, so a rejected batch cannot leave a partial write behind.
+  const planned = [];
+  let projectedBytes = 0;
+
+  const usageAgg = await sessions()
+    .aggregate([
+      { $match: { userId, deleted: { $ne: true } } },
+      { $group: { _id: null, bytes: { $sum: { $strLenCP: '$envelope.data' } } } },
+    ])
+    .toArray();
+  projectedBytes = usageAgg[0]?.bytes || 0;
 
   for (const item of items) {
-    const deviceId = req.get('X-Device-Id') || item.deviceId || 'unassigned';
+    const host = normalizeHost(item.host);
+    const deviceId = headerDeviceId || item.deviceId || 'unassigned';
     const deviceName = req.get('X-Device-Name') || item.deviceName || null;
 
-    const current = await sessions().findOne({ userId, deviceId, host: item.host });
+    const current = await sessions().findOne({ userId, deviceId, host });
 
-    if (!item.force && current && typeof item.baseVersion === 'number' && item.baseVersion !== -1 && current.version !== item.baseVersion) {
-      // Conflict — hand the client the winner so it can reconcile.
+    const hasBaseVersion = typeof item.baseVersion === 'number' && item.baseVersion >= 0;
+    if (current && hasBaseVersion && current.version !== item.baseVersion) {
+      planned.push({ kind: 'conflict', host, current });
+      continue;
+    }
+    // A tombstone cannot be resurrected from a stale base version.
+    if (current?.deleted && hasBaseVersion && item.baseVersion !== current.version) {
+      planned.push({ kind: 'conflict', host, current });
+      continue;
+    }
+
+    const oldBytes = current?.deleted ? 0 : envelopeBytes(current?.envelope);
+    projectedBytes += envelopeBytes(item.envelope) - oldBytes;
+    planned.push({
+      kind: 'write',
+      host,
+      deviceId,
+      deviceName,
+      current,
+      envelope: item.envelope,
+    });
+  }
+
+  if (projectedBytes > config.maxUserBytes) {
+    return res.status(413).json({
+      error: 'storage_limit_exceeded',
+      usage: { bytes: projectedBytes, limit: config.maxUserBytes },
+    });
+  }
+
+  // ── Phase 2: apply writes.
+  const results = [];
+  for (const entry of planned) {
+    if (entry.kind === 'conflict') {
       results.push({
-        host: item.host,
+        host: entry.host,
         status: 'conflict',
-        version: current.version,
-        updatedAt: current.updatedAt,
-        envelope: current.envelope,
+        version: entry.current.version,
+        updatedAt: entry.current.updatedAt,
+        deleted: !!entry.current.deleted,
+        envelope: entry.current.deleted ? null : entry.current.envelope,
       });
       continue;
     }
 
-    const version = (current?.version || 0) + 1;
+    const version = (entry.current?.version || 0) + 1;
     const updatedAt = new Date();
 
     await sessions().updateOne(
-      { userId, deviceId, host: item.host },
+      { userId, deviceId: entry.deviceId, host: entry.host },
       {
         $set: {
-          envelope: item.envelope,
+          envelope: entry.envelope,
           version,
           updatedAt,
           deleted: false,
-          deviceId,
-          deviceName,
+          deletedAt: null,
+          deviceId: entry.deviceId,
+          deviceName: entry.deviceName,
         },
       },
       { upsert: true },
     );
 
-    results.push({ host: item.host, status: 'ok', version, updatedAt });
+    results.push({ host: entry.host, status: 'ok', version, updatedAt });
   }
-
-  // Enforce the per-account budget after accepting, so a user can't flood us.
-  const used = await sessions()
-    .aggregate([
-      { $match: { userId } },
-      { $group: { _id: null, bytes: { $sum: { $strLenCP: '$envelope.data' } } } },
-    ])
-    .toArray();
 
   res.json({
     results,
-    usage: { bytes: used[0]?.bytes || 0, limit: config.maxUserBytes },
+    usage: { bytes: Math.max(0, projectedBytes), limit: config.maxUserBytes },
   });
 });
 
 /** GET /v1/sync/pull?since=<epochMs>&limit=<1..500> */
 router.get('/pull', async (req, res) => {
   const since = Number(req.query.since) || 0;
-  const limit = Math.min(Math.max(Number(req.query.limit) || 500, 1), 500);
+  const limit = Math.min(
+    Math.max(Number(req.query.limit) || MAX_PULL_LIMIT, 1),
+    MAX_PULL_LIMIT,
+  );
 
   // Overlap window guards against clock skew between client and server.
   const overlapMs = 5000;
 
   const items = await sessions()
-    .find({ userId: req.user.id, updatedAt: { $gt: new Date(since - overlapMs) } })
+    .find({
+      userId: req.user.id,
+      updatedAt: { $gt: new Date(since - overlapMs) },
+    })
     .sort({ updatedAt: 1 })
     .limit(limit)
     .toArray();
@@ -122,9 +186,12 @@ router.get('/pull', async (req, res) => {
   res.json({
     items: items.map((d) => ({
       host: d.host,
-      envelope: d.envelope,
+      // Tombstones deliberately carry no payload.
+      envelope: d.deleted ? null : d.envelope,
       version: d.version,
       updatedAt: d.updatedAt,
+      deleted: !!d.deleted,
+      deletedAt: d.deletedAt || null,
       deviceId: d.deviceId || null,
       deviceName: d.deviceName || null,
     })),
@@ -152,31 +219,54 @@ router.get('/list', async (req, res) => {
   });
 });
 
-/** DELETE /v1/sync/:host — permanently remove session from cloud database. */
+/** GET /v1/sync/usage — how much of the encrypted-blob budget is used. */
+router.get('/usage', async (req, res) => {
+  const agg = await sessions()
+    .aggregate([
+      { $match: { userId: req.user.id, deleted: { $ne: true } } },
+      { $group: { _id: null, bytes: { $sum: { $strLenCP: '$envelope.data' } } } },
+    ])
+    .toArray();
+  res.json({ bytes: agg[0]?.bytes || 0, limit: config.maxUserBytes });
+});
+
+/**
+ * DELETE /v1/sync/:host — tombstone a session.
+ *
+ * Only the exact host is touched. We do not guess registrable domains: doing
+ * `split('.').slice(-2)` turns `foo.co.uk` into `co.uk` and would delete an
+ * unrelated (and enormous) subtree on the server.
+ *
+ * By default a request carrying X-Device-Id only tombstones that device's
+ * copy. Pass `?allDevices=true` for an explicit account-wide delete.
+ */
 router.delete('/:host', async (req, res) => {
   const { host } = req.params;
   if (!validHost(host)) return res.status(400).json({ error: 'invalid_host' });
 
-  const cleanHost = String(host).replace(/^\./, '').toLowerCase().trim();
-  const rootDomain = cleanHost.split('.').slice(-2).join('.');
-
+  const cleanHost = normalizeHost(host);
+  const allDevices = req.query.allDevices === 'true';
   const deviceId = req.get('X-Device-Id') || req.query.deviceId || null;
-  const filter = {
-    userId: req.user.id,
-    $or: [
-      { host: cleanHost },
-      { host: rootDomain },
-      { host: `.${cleanHost}` },
-      { host: `.${rootDomain}` },
-    ],
-  };
 
-  if (deviceId) {
-    filter.deviceId = deviceId;
-  }
+  const filter = { userId: req.user.id, host: cleanHost };
+  if (!allDevices && deviceId) filter.deviceId = deviceId;
 
-  const result = await sessions().deleteMany(filter);
-  res.json({ ok: true, deletedCount: result.deletedCount });
+  const result = await sessions().updateMany(filter, {
+    $inc: { version: 1 },
+    $set: {
+      deleted: true,
+      deletedAt: new Date(),
+      updatedAt: new Date(),
+      envelope: null,
+    },
+  });
+
+  res.json({
+    ok: true,
+    host: cleanHost,
+    tombstoned: result.modifiedCount,
+    deletedCount: result.modifiedCount,
+  });
 });
 
 export default router;

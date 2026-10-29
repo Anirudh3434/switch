@@ -7,23 +7,26 @@
 // BUMP CONSENT_VERSION whenever the disclosure wording changes materially.
 // Existing users get re-prompted; the old record stays in `consentHistory`
 // so you can show a user exactly which version they accepted and when.
+//
+// The scope is intentionally narrow and truthful:
+//   - cookies, localStorage and the tokens inside them, for sites the user
+//     explicitly saves;
+//   - manual upload only. There is no automatic "sync everything" default.
+//   - opt-in auto-sync is a separate setting the user can turn off.
 
-export const CONSENT_VERSION = '2026-10-01';
+export const CONSENT_VERSION = '2026-10-28';
 
 // Message-protocol version. Bump whenever the message contract between the
 // popup and the background worker changes.
-//
-// Why this exists: Chrome only re-registers an unpacked extension's service
-// worker when you hit "Reload" in chrome://extensions. Extension *pages* are
-// re-read from disk every time they open. So after an update you can easily end
-// up with a new popup talking to an old worker, where every message silently
-// fails. The popup pings the worker and compares this number; a mismatch is
-// surfaced as "reload the extension" instead of a dead button.
-export const PROTOCOL = 2;
+export const PROTOCOL = 3;
 
 // The exact data types acknowledged. Kept in the record so consent is scoped
 // to specific practices, not a blanket "I agree".
 export const DATA_TYPES = ['cookies', 'localStorage', 'sessionTokens'];
+
+// Manual by default. The popup may offer opt-in per-site auto-sync later, but
+// it is never implied by accepting this consent.
+export const SYNC_MODE = 'manual';
 
 const CONSENT_KEY = 'consent';
 const HISTORY_KEY = 'consentHistory';
@@ -57,6 +60,7 @@ export async function giveConsent() {
     at: Date.now(),
     dataTypes: DATA_TYPES,
     scope: 'per-origin', // we never request <all_urls> at install
+    syncMode: SYNC_MODE,
   };
   await CH.storage.local.set({ [CONSENT_KEY]: consent });
 
@@ -71,16 +75,19 @@ export async function giveConsent() {
 export async function withdrawConsent({ wipeData = true } = {}) {
   const all = await CH.storage.local.get(null);
 
-  const removals = [CONSENT_KEY];
+  const removals = [CONSENT_KEY, 'autoSyncEnabled'];
   if (wipeData) {
-    // Saved sessions were captured under a consent that no longer applies.
     for (const key of Object.keys(all)) {
       if (
         key.startsWith('snap:') ||
         key.startsWith('switch:pending:') ||
         key.startsWith('attempt:') ||
         key.startsWith('rejected:') ||
-        key === 'switch:granted'
+        key.startsWith('never:') ||
+        key.startsWith('swap_backup_') ||
+        key === 'switch:granted' ||
+        key === 'activeSwaps' ||
+        key === 'active_swaps'
       ) {
         removals.push(key);
       }
@@ -89,12 +96,23 @@ export async function withdrawConsent({ wipeData = true } = {}) {
   await CH.storage.local.remove(removals);
 
   if (wipeData) {
-    // Best-effort: revoke the browser-level host permissions too.
     try {
       const origins = (await CH.permissions.getAll()).origins || [];
       if (origins.length) await CH.permissions.remove({ origins });
     } catch (e) {
       console.warn('[switch] could not revoke host permissions', e);
+    }
+
+    // Drop dynamically registered content scripts too; otherwise a stale
+    // detector keeps running on a site the user just withdrew from.
+    try {
+      const scripts = await CH.scripting.getRegisteredContentScripts();
+      const ids = (scripts || [])
+        .map((s) => s.id)
+        .filter((id) => id.startsWith('switch-'));
+      if (ids.length) await CH.scripting.unregisterContentScripts({ ids });
+    } catch {
+      // Older browsers may not support listing; ignore.
     }
   }
 }

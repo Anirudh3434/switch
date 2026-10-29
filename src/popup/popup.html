@@ -75,6 +75,21 @@
         </div>
 
 
+        <div class="input-group">
+          <label for="auth-server-url">Sync server</label>
+          <input
+            type="url"
+            id="auth-server-url"
+            placeholder="https://sync.example.com"
+            spellcheck="false"
+            autocomplete="url"
+          />
+          <p id="auth-server-hint" class="auth-server-hint">
+            Development default shown below. A production build has no hosted
+            server — enter the address your operator gave you.
+          </p>
+        </div>
+
         <div class="auth-options-row" id="auth-options-row">
           <label class="checkbox-label" for="auth-remember-me">
             <input type="checkbox" id="auth-remember-me" checked />
@@ -299,7 +314,21 @@
         <span class="vchip vchip-tab"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/></svg> Local Memory</span>
       </div>
 
-      <button id="give-consent-btn" class="btn btn-primary btn-block">
+      <!-- Affirmative, specific disclosure. The button stays disabled until
+           this is checked; consent.js records exactly this scope. -->
+      <label class="consent-disclosure" for="consent-checkbox">
+        <input type="checkbox" id="consent-checkbox" />
+        <span>
+          I understand that when I choose to save a site, Switch reads that
+          site's cookies, localStorage and session tokens, encrypts them on this
+          device, and — only when I press Save or Sync — uploads the encrypted
+          copy to my sync server. Sites are saved one at a time and nothing is
+          uploaded in the background by default. I can withdraw consent and
+          delete this data at any time in Settings.
+        </span>
+      </label>
+
+      <button id="give-consent-btn" class="btn btn-primary btn-block" disabled>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
         </svg>
@@ -552,7 +581,7 @@
             <span class="vchip vchip-browser" title="Browser"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10z"/></svg> <span id="current-device-browser">—</span></span>
             <span class="vchip vchip-os" title="Operating System"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> <span id="current-device-os">—</span></span>
             <span class="vchip vchip-secure" title="Vault Connected"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="20 6 9 17 4 12"/></svg> Synced</span>
-            <span class="vchip vchip-id" title="Hardware Machine ID"><code id="current-system-id">sys_loading…</code></span>
+            <span class="vchip vchip-id" title="Random per-profile system ID (not a hardware fingerprint)"><code id="current-system-id">sys_loading…</code></span>
           </div>
         </div>
 
@@ -642,18 +671,81 @@
             </div>
           </div>
 
-          <!-- SECTION 3: ACTIONS -->
+          <!-- SECTION 3: SYNC SETTINGS -->
+          <div class="profile-section-card">
+            <div class="profile-section-title">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+              <span>Sync settings</span>
+            </div>
+            <form id="settings-form" class="settings-form" autocomplete="off">
+              <label for="settings-server-url">Sync server URL</label>
+              <input
+                id="settings-server-url"
+                type="url"
+                class="settings-input"
+                placeholder="https://sync.example.com"
+                spellcheck="false"
+              />
+              <p class="settings-hint">
+                The server stores only encrypted blobs. Use the address your
+                operator gave you; there is no hosted default in production.
+              </p>
+
+              <label class="settings-toggle" for="settings-auto-sync">
+                <input type="checkbox" id="settings-auto-sync" />
+                <span>
+                  <strong>Opt-in auto-sync for saved sites.</strong>
+                  When on, changes to cookies on sites you have explicitly saved
+                  are uploaded automatically. When off (default), nothing is
+                  uploaded until you press Save or Sync.
+                </span>
+              </label>
+
+              <button id="settings-save-btn" type="submit" class="btn btn-secondary btn-sm">
+                Save settings
+              </button>
+              <p id="settings-msg" class="settings-msg hidden" role="status"></p>
+            </form>
+          </div>
+
+          <!-- SECTION 4: DATA & PRIVACY -->
+          <div class="profile-section-card">
+            <div class="profile-section-title">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+              <span>Data &amp; privacy</span>
+            </div>
+            <div class="profile-actions-row">
+              <button id="account-export-btn" class="btn btn-secondary btn-sm" title="Download a machine-readable copy of your server-side data">
+                Export my data
+              </button>
+              <button id="account-delete-btn" class="btn btn-danger-outline btn-sm" title="Permanently delete your account and all synced data">
+                Delete account…
+              </button>
+            </div>
+            <p class="settings-hint">
+              Signing out keeps your encrypted sessions on the server for your
+              other devices. Deleting your account removes them everywhere and
+              cannot be undone.
+            </p>
+          </div>
+
+          <!-- SECTION 5: ACTIONS -->
           <div class="profile-actions-row">
             <button id="account-lock-btn" class="btn btn-secondary btn-sm" title="Lock the in-memory vault key until master password is re-entered">
               <span class="switch-icon switch-icon-lock size-xs"></span>
               Lock vault key
             </button>
-            <a href="../../website/support.html#feedback" target="_blank" id="account-feedback-btn" class="btn btn-secondary btn-sm" title="Report a bug, improvement, or suggestion" style="text-decoration:none;">
+            <button id="account-privacy-btn" class="btn btn-secondary btn-sm" title="Open the privacy notice">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
               </svg>
-              Feedback
-            </a>
+              Privacy
+            </button>
             <button id="account-logout-btn" class="btn btn-danger-outline btn-sm">
               <span class="switch-icon switch-icon-logout size-xs"></span>
               Sign out
@@ -761,13 +853,84 @@
 
         <div class="modal-body">
           <p class="modal-desc">
-            Are you sure you want to sign out?
+            This signs out this browser only. Your encrypted sessions and your
+            other signed-in devices stay exactly as they are. To remove your
+            data everywhere, use “Delete account”.
           </p>
         </div>
 
         <div class="modal-actions">
           <button id="logout-modal-cancel" class="btn btn-secondary">Cancel</button>
           <button id="logout-modal-confirm" class="btn btn-danger">Sign out</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- DELETE ACCOUNT CONFIRMATION MODAL -->
+    <div id="delete-account-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="delete-account-title">
+      <div class="modal-card modal-card-simple">
+        <div class="modal-header">
+          <div class="modal-icon-wrap modal-icon-danger">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h18"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </div>
+          <div class="modal-title-col">
+            <h3 id="delete-account-title" class="modal-title">Delete account</h3>
+          </div>
+          <button id="delete-account-close" class="modal-close-btn" title="Cancel" aria-label="Cancel">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <p class="modal-desc">
+            This permanently erases your account, every encrypted session copy,
+            device registration and share. It cannot be undone. Export your data
+            first if you want a copy.
+          </p>
+        </div>
+
+        <div class="modal-actions">
+          <button id="delete-account-cancel" class="btn btn-secondary">Cancel</button>
+          <button id="delete-account-confirm" class="btn btn-danger">Delete everything</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PREVIOUS-INSTALL MERGE MODAL -->
+    <div id="device-merge-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="device-merge-title">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-icon-wrap modal-icon-info">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+              <line x1="8" y1="21" x2="16" y2="21"/>
+              <line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+          </div>
+          <div class="modal-title-col">
+            <h3 id="device-merge-title" class="modal-title">Was this the same browser?</h3>
+          </div>
+          <button id="device-merge-close" class="modal-close-btn" title="Not now" aria-label="Not now">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <p class="modal-desc">
+            This account already lists a device with the same browser and
+            operating system. If that was an earlier install of this browser,
+            merge it into this one. Its synced sessions move here and the
+            duplicate device disappears.
+          </p>
+          <div id="device-merge-candidate" class="device-merge-candidate"></div>
+          <p class="modal-desc">
+            Only merge if you recognise this device. Two different computers can
+            show the same browser and OS.
+          </p>
+        </div>
+
+        <div class="modal-actions">
+          <button id="device-merge-cancel" class="btn btn-secondary">Keep separate</button>
+          <button id="device-merge-confirm" class="btn btn-primary">Merge into this browser</button>
         </div>
       </div>
     </div>
