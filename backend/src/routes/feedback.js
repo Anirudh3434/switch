@@ -37,14 +37,17 @@ router.post('/', async (req, res) => {
   }
 
   const cleanEmail = email ? String(email).trim().toLowerCase() : null;
+  if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    return res.status(400).json({ error: 'invalid_email' });
+  }
 
   try {
     const feedbackDoc = {
       type: cleanType,
       description: cleanDesc,
       email: cleanEmail,
-      ip: req.ip || null,
-      userAgent: req.get('user-agent') || null,
+      // Deliberately do not store IP address or user-agent. They are not
+      // needed to answer feedback and turn the admin console into a PII trove.
       createdAt: new Date(),
     };
 

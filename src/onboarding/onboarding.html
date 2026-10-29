@@ -51,13 +51,13 @@
           <tbody>
             <tr>
               <td><strong>Cookies</strong><br /><span class="muted">including session cookies</span></td>
-              <td>Only when you click <em>Save this session</em> or <em>Restore</em>, on a site you've granted</td>
-              <td>Encrypted on your device</td>
+              <td>Only when you click <em>Save this session</em>, <em>Sync</em> or <em>Restore</em>, on a site you've granted</td>
+              <td>Encrypted on your device; uploaded only when you press Save or Sync</td>
             </tr>
             <tr>
               <td><strong>localStorage &amp; site tokens</strong></td>
               <td>Same — only on granted sites, only when you act</td>
-              <td>Encrypted on your device</td>
+              <td>Encrypted on your device; uploaded only when you press Save or Sync</td>
             </tr>
           </tbody>
         </table>
@@ -65,6 +65,7 @@
         <ul class="facts">
           <li>Access is requested <strong>one site at a time</strong>, using your browser's own permission prompt.</li>
           <li>Switch does <strong>not</strong> request access to all websites when you install it.</li>
+          <li><strong>Nothing is uploaded in the background.</strong> Saving and syncing are separate, explicit actions. Opt-in auto-sync is off by default and limited to sites you have already saved.</li>
           <li>Your sessions are encrypted with a key derived from your password. Switch's server never holds that key.</li>
         </ul>
 
@@ -91,8 +92,9 @@
             leave your device. Nothing can change that.
           </li>
           <li>
-            <strong>No phone, no Safari yet.</strong> Browser restrictions block
-            it. Chromium and Firefox only for now.
+            <strong>No phone or Safari.</strong> Browser restrictions block it.
+            This build targets Chromium-based browsers (Chrome, Edge, Brave).
+            Firefox support is not shipped yet.
           </li>
           <li>
             <strong>You are responsible for your password.</strong> If you lose
@@ -116,9 +118,11 @@
         <label class="check">
           <input type="checkbox" id="agree" />
           <span>
-            I understand that Switch reads <strong>cookies, localStorage and
-            session tokens</strong> for the sites I explicitly grant — and only
-            when I choose to save or restore a session on those sites.
+            I understand that when I explicitly save a site, Switch reads
+            <strong>cookies, localStorage and session tokens</strong> for that
+            site, encrypts them on this device, and uploads the encrypted copy
+            to my sync server only when I press Save or Sync. Nothing is
+            uploaded in the background by default.
           </span>
         </label>
 

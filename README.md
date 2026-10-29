@@ -3,9 +3,11 @@
 Save a login session on Browser A, restore it on Browser B. Client-side
 encrypted; the sync server (or exported file) never sees plaintext.
 
-**Status: Active.** Chromium + Firefox. End-to-end encrypted session bridge.
+**Status: pre-release.** Chromium only (Chrome, Edge, Brave and similar). There
+is no Firefox build and no published store listing; install from an unpacked
+build. Sync is optional and manual by default.
 
-📖 **Complete Product & UI Guide**: See [PRODUCT_OVERVIEW.md](file:///c:/Users/Anirudh%20Bhardwaj/Desktop/switch/PRODUCT_OVERVIEW.md) for full screen-by-screen breakdown.
+📖 **Complete Product & UI Guide**: See [PRODUCT_OVERVIEW.md](PRODUCT_OVERVIEW.md) for full screen-by-screen breakdown.
 
 ---
 
@@ -17,9 +19,9 @@ encrypted; the sync server (or exported file) never sees plaintext.
 4. Open the same site in another browser with the extension → **Restore on this browser**
    (or **Export encrypted file…** here and **Import file…** there — no server needed)
 
-Firefox: `about:debugging` → *This Firefox* → *Load Temporary Add-on* → pick `manifest.json`.
-Note: Firefox and Chrome cookie formats are **not interchangeable** — export/import
-must happen between compatible builds.
+Firefox is **not supported**: Switch relies on Chromium extension APIs and ships
+no Gecko build. Export/import compatibility across unrelated browsers is not
+guaranteed because cookie formats differ.
 
 ---
 
@@ -70,11 +72,9 @@ must happen between compatible builds.
 - `__Host-*`: must be `secure`, `path=/`, host-only. Forced.
 - `__Secure-*`: `secure` forced.
 - `SameSite=None` without `Secure` → the browser discards it. Forced.
-- Firefox rejects `sameSite: "unspecified"` → mapped to `lax`.
 - **Partitioned (CHIPS)** cookies: `partitionKey` is preserved both ways, or the
   cookie lands in a bucket the site never reads.
 - Session cookies stay session cookies — no fake `expirationDate`.
-- `firstPartyDomain` (Firefox FPI / Tor) preserved.
 
 ---
 
@@ -97,27 +97,28 @@ must happen between compatible builds.
    Mitigated by a follow-up reload — after the first apply, localStorage
    persists natively, so subsequent loads are always clean. IndexedDB is not
    yet supported (v2).
-8. **Snapshots are stored in `chrome.storage.local` in plaintext** for v1 —
-   no worse than the browser's own cookie DB on the same disk, but encrypt-at-rest
-   is v2 work.
+8. **Encryption at rest does not protect a compromised browser.** Snapshots are
+   sealed with the vault key and host-bound AAD, and legacy plaintext is
+   re-sealed the first time it is read. But while the vault is unlocked the key
+   is in memory, so malware inside the browser profile can read it.
 
 ---
 
 ## Roadmap
 
-- [ ] Argon2id (WASM) replacing PBKDF2 — do this **before** public launch
-- [ ] Encrypt snapshots at rest with the vault key
+- [ ] Argon2id (WASM) replacing PBKDF2
+- [x] Encrypt snapshots at rest with the vault key
 - [ ] IndexedDB + Cache Storage capture (large; needs size caps)
-- [ ] Real backend: E2EE blob store, per-record versioning, LWW conflict resolution
-- [ ] Per-site "auto-restore" opt-in + session-expiry detection
+- [x] Backend: E2EE blob store, per-record versioning, conflict detection
+- [x] Per-site explicit sync + opt-in auto-sync (default off)
 - [ ] **Team handoff** — share one site's session with a teammate, revoke later.
-      This is where the money is (anti-detect browsers charge $8–100+/mo for it).
-- [ ] Firefox container (`contextualIdentities`) support
+      Server-side pieces exist; the launch UI does not expose them.
+- [ ] Firefox container (`contextualIdentities`) support — requires a Gecko port
 - [ ] Passkey wrapping for the vault key itself
 
 ---
 
-## Threat model (read this before you add a server)
+## Threat model (read this before you deploy a server)
 
 - **You will be the highest-value target in your users' stack.** A breach gives
   attackers *live* sessions to their bank and Gmail — far worse than a password

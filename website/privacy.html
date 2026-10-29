@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — Switch</title>
+  <meta name="description" content="How Switch handles session data: per-site access, client-side encryption, manual sync, retention and deletion." />
+  <link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="canvas-ambient">
+    <div class="grid-overlay"></div>
+    <div class="ambient-spot spot-cyan"></div>
+    <div class="ambient-spot spot-violet"></div>
+  </div>
+
+  <header class="masthead legal-header">
+    <div class="container masthead-inner">
+      <a href="index.html" class="brand-entity">
+        <div class="brand-monogram">
+          <img src="assets/icon-128.png" alt="Switch" class="brand-img" width="30" height="30" />
+        </div>
+        <span class="brand-wordmark">Switch</span>
+      </a>
+      <nav class="navigation-cluster">
+        <a href="index.html" class="nav-anchor">Home</a>
+        <a href="about.html" class="nav-anchor">About &amp; How It Works</a>
+        <a href="download.html" class="nav-anchor">Download</a>
+        <a href="support.html" class="nav-anchor">Help &amp; Support</a>
+        <a href="privacy.html" class="nav-anchor active">Privacy</a>
+      </nav>
+      <div class="masthead-action">
+        <a href="download.html" class="btn btn-primary btn-sm">
+          <span>Download Free</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="legal-doc" id="top">
+    <p class="legal-eyebrow">Legal</p>
+    <h1>Privacy Policy</h1>
+    <p class="legal-updated">Last updated: 28 October 2026 &middot; Policy version 2026-10-28</p>
+
+    <div class="legal-callout">
+      <strong>Operator notice.</strong> Items shown in brackets are placeholders
+      that only the deployment operator can fill in. Do not treat this page as a
+      published policy until they are replaced. See the repository's
+      <code>LAUNCH_BLOCKERS.md</code>.
+    </div>
+
+    <h2>1. Who is responsible for your data</h2>
+    <p>
+      Switch is a browser extension plus an optional, self-hostable sync service.
+      The data controller for a hosted deployment is
+      <span class="legal-placeholder" data-site-legal-entity>[Legal entity name — not yet configured]</span>.
+    </p>
+    <ul>
+      <li>Privacy contact: <span class="legal-placeholder" data-site-privacy-contact>privacy@your-domain.example</span></li>
+      <li>Security contact: <span class="legal-placeholder" data-site-security-contact>security@your-domain.example</span></li>
+      <li>Registered address and EU/UK representative: <span class="legal-placeholder">[TO BE CONFIGURED]</span></li>
+    </ul>
+    <p>
+      If you run your own Switch server, <strong>you</strong> are the controller
+      for the data on that server. The project maintainers do not operate your
+      deployment and cannot access it.
+    </p>
+
+    <h2>2. The short version</h2>
+    <ul>
+      <li>Switch reads the login state only of websites <strong>you explicitly grant</strong>.</li>
+      <li>Session data is encrypted <strong>on your device</strong> before it is stored or uploaded. We do not hold your key.</li>
+      <li>Sync is <strong>manual by default</strong>. Signing in does not upload anything.</li>
+      <li>Optional auto-sync is <strong>off by default</strong>, limited to granted sites, and requires an unlocked vault.</li>
+      <li>We do not sell data, run advertising analytics, or build a browsing profile.</li>
+      <li>You can export or permanently delete your account from the extension.</li>
+    </ul>
+
+    <h2>3. What Switch accesses on your device</h2>
+    <p>
+      Switch requests host access <strong>per site</strong>, through your
+      browser's own permission prompt. It does not request access to all websites
+      at install time.
+    </p>
+    <p>When you explicitly save or restore a session for a granted site, Switch may read:</p>
+    <ul>
+      <li><strong>Cookies</strong> for that site, including <code>HttpOnly</code> cookies.</li>
+      <li><strong><code>localStorage</code> and comparable web storage</strong> for that site.</li>
+      <li><strong>Session tokens</strong> inside those cookies or storage entries.</li>
+    </ul>
+    <p>Switch also reads, locally:</p>
+    <ul>
+      <li>The site's hostname, to label the session and bind encryption to it.</li>
+      <li>Coarse browser and operating-system information (for example "Chrome 141 on Windows 10/11") used only as a device label.</li>
+    </ul>
+    <p>Switch does <strong>not</strong> read passwords you type, form contents, keystrokes, screenshots, page text, sites you have not granted, your full browsing history, other browser profiles, or other extensions.</p>
+
+    <h2>4. What is stored, and where</h2>
+    <h3>4.1 On your device</h3>
+    <ul>
+      <li><strong>Session snapshots</strong> — cookies and storage for granted sites, held in the extension's local storage and <strong>encrypted at rest</strong> with a key derived from your master password.</li>
+      <li><strong>Vault key</strong> — held in <code>chrome.storage.session</code>, cleared when the browser session ends. It is not written to persistent storage.</li>
+      <li><strong>Consent record</strong> — the consent version, timestamp, acknowledged categories, and a short history.</li>
+      <li><strong>Local settings and identifiers</strong> — a random <code>deviceId</code>, a random per-profile <code>systemId</code>, the granted-host list, and UI preferences.</li>
+    </ul>
+    <p>
+      Signing out clears the vault key and local plaintext caches. It does not
+      delete your local snapshots unless you ask it to; deleting the account does.
+    </p>
+
+    <h3>4.2 On the sync server, only if you choose to use it</h3>
+    <table class="legal-table">
+      <thead>
+        <tr><th>Data</th><th>Why it exists</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Email address</td><td>Account identifier and sign-in</td></tr>
+        <tr><td><code>authHash</code>, scrypt-hashed at rest</td><td>Password-equivalent verifier; we never receive your password</td></tr>
+        <tr><td>KDF salt and iteration count</td><td>So your device can derive the same keys</td></tr>
+        <tr><td>Optional public key</td><td>Enables encrypted session sharing with another account</td></tr>
+        <tr><td>Encrypted session envelopes</td><td>Ciphertext of captured sessions</td></tr>
+        <tr><td>Host, version, timestamps, tombstone flags</td><td>Sync ordering, conflict detection and deletion propagation</td></tr>
+        <tr><td>Random <code>deviceId</code> and <code>systemId</code></td><td>Grouping your own devices; not a hardware fingerprint</td></tr>
+        <tr><td>Device label and coarse browser/OS/major version</td><td>Lets you recognise your own devices</td></tr>
+        <tr><td>Refresh-token hashes and expiry</td><td>Session continuity and revocation</td></tr>
+        <tr><td>OTP hashes and expiry</td><td>Email verification and password reset</td></tr>
+        <tr><td>Shared-session records</td><td>Who sent what to whom, and acceptance state</td></tr>
+        <tr><td>Feedback you submit</td><td>Bug reports and suggestions, with an optional email</td></tr>
+      </tbody>
+    </table>
+    <p>
+      The server does not store your master password, encryption key, plaintext
+      cookies, user-agent string, application-database IP address, or browsing
+      history.
+    </p>
+
+    <h3>4.3 Transient technical data</h3>
+    <p>
+      The server processes your IP address in memory to apply rate limits and
+      block abuse. Application code does not write it to the database. Hosting
+      and network providers may keep short-lived access logs containing IP
+      addresses for security and operations. Hosting provider and log retention:
+      <span class="legal-placeholder">[TO BE CONFIGURED]</span>.
+    </p>
+
+    <h2>5. How encryption works</h2>
+    <ul>
+      <li>Your master password is processed locally with PBKDF2-SHA-256 to derive separate authentication and encryption material.</li>
+      <li>New accounts use <strong>600,000 iterations</strong>; the count is stored per account so older accounts can still sign in and be upgraded over time.</li>
+      <li>Session data is encrypted with <strong>AES-256-GCM</strong>, bound to its hostname using authenticated additional data, so a server cannot silently move one site's session onto another.</li>
+      <li>The server stores ciphertext only. There is no decryption path server-side.</li>
+    </ul>
+    <p>
+      If you lose your master password, your encrypted sessions cannot be
+      recovered. That is a deliberate consequence of zero-knowledge design.
+    </p>
+
+    <h2>6. Why we process data</h2>
+    <p>Where the GDPR or UK GDPR applies, we rely on:</p>
+    <ul>
+      <li><strong>Contract</strong> — to provide the extension and sync service you asked for.</li>
+      <li><strong>Consent</strong> — for reading site data and uploading it. You give this per site and can withdraw it; withdrawal deletes saved snapshots and revokes host access.</li>
+      <li><strong>Legitimate interests</strong> — keeping the service secure, preventing abuse, and fixing defects, limited to what is necessary and not used for advertising.</li>
+      <li><strong>Legal obligation</strong> — where we must retain or disclose something by law.</li>
+    </ul>
+    <p>
+      Where India's Digital Personal Data Protection Act applies, we process
+      personal data on the basis of your consent and the limited "legitimate
+      uses" permitted by that Act. You may withdraw consent at any time.
+    </p>
+
+    <h2>7. Sharing and third parties</h2>
+    <p>
+      We do not sell personal data and do not share it for cross-context
+      behavioural advertising. We share only with providers needed to run the
+      service:
+    </p>
+    <ul>
+      <li><strong>Database hosting</strong> for encrypted envelopes and account records.</li>
+      <li><strong>Email delivery (SMTP)</strong> for verification and password-reset messages. The provider sees your address and message content.</li>
+      <li><strong>Infrastructure hosting</strong> for the API.</li>
+      <li><strong>Authorised operators</strong>, who can see account metadata and masked identifiers. Unmasking is logged. Even an operator cannot decrypt session envelopes.</li>
+    </ul>
+    <p>
+      Hosting providers, regions and subprocessor list:
+      <span class="legal-placeholder">[TO BE CONFIGURED]</span>.
+    </p>
+
+    <h2>8. International transfers</h2>
+    <p>
+      A hosted deployment may process data outside your country. Where required,
+      transfers rely on an adequacy decision or standard contractual clauses.
+      Transfer mechanism and destination countries:
+      <span class="legal-placeholder">[TO BE CONFIGURED]</span>.
+      Self-hosted deployments keep data wherever the operator runs them.
+    </p>
+
+    <h2>9. Retention</h2>
+    <ul>
+      <li><strong>Account and sync data</strong> — until you delete your account or the operator removes it. Deleted-session records become tombstones containing no session payload, so deletions propagate to your other devices.</li>
+      <li><strong>Refresh tokens and OTPs</strong> — expire automatically through database TTL indexes.</li>
+      <li><strong>Reinstalled devices</strong> — reinstalling creates a new random device identifier. If you explicitly merge the previous install, its encrypted session copies are reassigned to the current device and the duplicate device registration is deleted. Merging never decrypts session contents.</li>
+      <li><strong>Feedback</strong> — retained until reviewed and then deleted, or for a maximum of <span class="legal-placeholder">[RETENTION PERIOD — TO BE CONFIGURED]</span>.</li>
+      <li><strong>Hosting logs</strong> — per the hosting configuration in section 4.3.</li>
+    </ul>
+    <p>
+      Account deletion is immediate and irreversible. It removes the account
+      record, encrypted session copies, device registrations, refresh tokens,
+      OTPs, recovery keys and shares. Backups may retain encrypted copies for a
+      limited period before rotation; they contain no plaintext sessions.
+    </p>
+
+    <h2>10. Security</h2>
+    <p>
+      We use TLS for transport, AES-256-GCM for session data, scrypt for stored
+      authentication verifiers, short-lived access tokens, rotating refresh
+      tokens, per-account storage budgets, and rate limiting. The extension keeps
+      the vault key in session storage and re-seals legacy plaintext snapshots on
+      read.
+    </p>
+    <p>
+      No system is perfectly secure. Report a suspected vulnerability to
+      <span class="legal-placeholder" data-site-security-contact>security@your-domain.example</span>
+      rather than opening a public issue with exploit details.
+    </p>
+
+    <h2>11. Your rights</h2>
+    <p>Depending on where you live, you may have the right to:</p>
+    <ul>
+      <li><strong>Access</strong> a copy of your personal data.</li>
+      <li><strong>Portability</strong> — the extension has a built-in export returning account, device, session-envelope and share metadata as JSON.</li>
+      <li><strong>Correction</strong> of inaccurate account information.</li>
+      <li><strong>Erasure</strong> of your account and associated data.</li>
+      <li><strong>Restriction or objection</strong> to certain processing.</li>
+      <li><strong>Withdraw consent</strong> at any time, without affecting prior lawful processing.</li>
+      <li><strong>Complain</strong> to your local supervisory authority.</li>
+    </ul>
+    <p>
+      Use the in-extension controls, or contact
+      <span class="legal-placeholder" data-site-privacy-contact>privacy@your-domain.example</span>.
+      We may need to verify that you control the account.
+    </p>
+    <h3>India — grievance officer (DPDP Act)</h3>
+    <ul>
+      <li>Grievance officer: <span class="legal-placeholder">[NAME — TO BE CONFIGURED]</span></li>
+      <li>Email: <span class="legal-placeholder">[GRIEVANCE EMAIL — TO BE CONFIGURED]</span></li>
+      <li>Response window: <span class="legal-placeholder">[TO BE CONFIGURED]</span></li>
+    </ul>
+    <p>You may escalate an unresolved grievance to the Data Protection Board of India.</p>
+
+    <h2>12. Children</h2>
+    <p>
+      Switch is not directed to children under 13, or the higher minimum age of
+      digital consent in your jurisdiction. We do not knowingly collect data from
+      children. If you believe a child created an account, contact us and we will
+      delete it.
+    </p>
+
+    <h2>13. Automated decisions and advertising</h2>
+    <p>
+      We do not make automated decisions that produce legal or similarly
+      significant effects. We do not run advertising or cross-site tracking
+      analytics.
+    </p>
+
+    <h2>14. Changes to this policy</h2>
+    <p>
+      We will update the version and date when this policy changes materially. If
+      a change affects how we handle your data, the extension will ask you to
+      review and accept the new disclosure before continuing. Historic consent
+      records are kept so you can see which version you accepted and when.
+    </p>
+
+    <h2>15. Contact</h2>
+    <p>
+      Questions, requests and complaints:
+      <span class="legal-placeholder" data-site-privacy-contact>privacy@your-domain.example</span><br />
+      Security reports:
+      <span class="legal-placeholder" data-site-security-contact>security@your-domain.example</span>
+    </p>
+  </main>
+
+  <footer class="colophon">
+    <div class="container colophon-bottom">
+      <div class="colophon-legal-text">
+        <span>&copy; 2026 Switch Project contributors. Released under the MIT License. Optional sync stores only encrypted data; no analytics or advertising trackers.</span>
+      </div>
+      <div class="colophon-bottom-links">
+        <a href="privacy.html" class="colophon-bottom-link">Privacy Policy</a>
+        <span class="bullet-sep">&bull;</span>
+        <a href="terms.html" class="colophon-bottom-link">Terms of Service</a>
+        <span class="bullet-sep">&bull;</span>
+        <a href="support.html" class="colophon-bottom-link">Support Desk</a>
+        <button class="back-to-top-btn" id="backToTopBtn" type="button" title="Back to top">
+          <span>Top</span>
+        </button>
+      </div>
+    </div>
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

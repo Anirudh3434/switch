@@ -16,6 +16,10 @@
         display: inline-block; margin-bottom: 20px; color: var(--accent);
         text-decoration: none; font-size: 13px;
       }
+      .placeholder {
+        color: #fbbf24;
+        border-bottom: 1px dashed currentColor;
+      }
     </style>
   </head>
   <body>
@@ -29,14 +33,15 @@
           <p class="tag">Privacy Policy</p>
         </div>
       </div>
-      <p class="updated">Last updated: 1 October 2026</p>
+      <p class="updated">Last updated: 28 October 2026 · Version 2026-10-28</p>
 
       <h2>The short version</h2>
       <p>
         Switch reads the login state of websites <strong>you explicitly
-        grant</strong>, encrypts it on your device, and never sends it anywhere
-        in a form we can read. We don't sell data, we don't run analytics on your
-        browsing, and we can't recover your sessions if you lose your password.
+        grant</strong>, encrypts it on your device, and never sees it in a form
+        it can read. Sync is <strong>manual by default</strong>: signing in does
+        not upload anything. We don't sell data, don't run advertising
+        analytics, and can't recover your sessions if you lose your password.
       </p>
 
       <h2>What Switch accesses</h2>
@@ -51,56 +56,88 @@
           at the same moments. Many modern apps store their auth token here
           instead of a cookie.
         </li>
+        <li>
+          <strong>Coarse device information</strong> — browser name, major
+          version, and operating system, used only as a label so you can
+          recognise your own devices. No user-agent string, platform or language
+          is uploaded.
+        </li>
       </ul>
       <p>
         Access is requested per site, through your browser's own permission
         prompt. Switch does <strong>not</strong> request access to all websites
-        when installed, and does not read anything in the background.
+        when installed.
       </p>
 
       <h2>What Switch never does</h2>
       <ul>
         <li>Never reads the passwords you type.</li>
         <li>Never collects data from sites you haven't granted.</li>
-        <li>Never runs in the background watching your browsing.</li>
-        <li>Never sends your sessions, keys, or password to our servers.</li>
-        <li>Never sells or shares data with third parties.</li>
+        <li>Never uploads anything simply because you signed in.</li>
+        <li>Never sends your password or encryption key anywhere.</li>
+        <li>
+          Never uploads sessions unless you explicitly sync them, or you turn on
+          the optional auto-sync setting for sites you granted.
+        </li>
+        <li>Never sells or shares data with advertisers.</li>
       </ul>
 
       <h2>How your data is protected</h2>
       <p>
         Sessions are encrypted with AES-256-GCM using a key derived from your
-        password (PBKDF2-SHA256, 310,000 iterations). The key is derived
-        separately for authentication and encryption, so a leaked login hash
-        can't be used to decrypt your sessions. The server stores only encrypted
-        blobs — it never holds your password or your encryption key. This is
-        zero-knowledge: we cannot read your sessions even if compelled to.
+        password. New accounts use PBKDF2-SHA-256 with 600,000 iterations; the
+        iteration count is stored per account so older accounts can still sign
+        in. Authentication and encryption use separate derivations, so a leaked
+        login hash can't decrypt your sessions.
+      </p>
+      <p>
+        The ciphertext is bound to the site's hostname with authenticated
+        additional data, so a server cannot silently move one site's session onto
+        another site. Snapshots stored on your device are encrypted at rest too;
+        legacy plaintext snapshots are re-sealed the first time they are read.
+        The vault key lives in session storage and is cleared when the browser
+        session ends or you sign out. This is zero-knowledge: the server cannot
+        read your sessions even if compelled to.
       </p>
 
       <h2>Where data is stored</h2>
       <ul>
         <li>
           <strong>On your device</strong> — in the extension's local storage,
-          encrypted. This is the default, and works without an account.
+          encrypted. This is the default and works without an account.
         </li>
         <li>
-          <strong>On our server</strong> — only if you sign in to sync across
-          your own machines. Encrypted blobs only. You can delete them at any
-          time.
+          <strong>On a sync server</strong> — only if you sign in and choose to
+          sync. The server stores encrypted envelopes plus account and routing
+          metadata (email, KDF salt, encrypted session blobs, host names,
+          versions, timestamps, random device identifiers and coarse device
+          labels). It never stores your password, key, or plaintext cookies.
         </li>
       </ul>
+
+      <h2>Auto-sync (off by default)</h2>
+      <p>
+        Auto-sync is an optional setting, disabled by default. Even when enabled,
+        it only runs while you are signed in, your vault is unlocked, consent is
+        current, and the site has been granted. There is no background upload of
+        your whole browser profile.
+      </p>
 
       <h2>Sharing with other people</h2>
       <p>
         If you choose to hand a session to a teammate, it's re-encrypted to their
-        public key before upload. Only they can open it. We can't.
+        public key before upload. Only they can open it. We can't. Revoking a
+        share does not retract a session the recipient already imported.
       </p>
 
       <h2>Your control</h2>
       <p>
         You can withdraw consent and delete all saved sessions at any time from
         the extension's settings. Withdrawing consent deletes every saved
-        session, revokes site access, and cannot be undone.
+        snapshot, revokes site access and unregisters the content scripts; it
+        cannot be undone. Signing out is local-only and does not delete your
+        account. Account deletion is a separate, explicit action that removes your
+        server-side data as well.
       </p>
 
       <h2>What Switch can't do</h2>
@@ -112,7 +149,18 @@
       </p>
 
       <h2>Contact</h2>
-      <p>Questions about this policy: privacy@switch.example</p>
+      <p>
+        Questions about this policy:
+        <span class="placeholder">[PRIVACY EMAIL — TO BE CONFIGURED]</span><br />
+        Data controller:
+        <span class="placeholder">[LEGAL ENTITY — TO BE CONFIGURED]</span><br />
+        Grievance officer (India, DPDP Act):
+        <span class="placeholder">[NAME AND EMAIL — TO BE CONFIGURED]</span>
+      </p>
+      <p class="updated">
+        This in-app notice is a summary. The full policy in the repository
+        (<code>PRIVACY_POLICY.md</code>) controls.
+      </p>
     </main>
   </body>
 </html>

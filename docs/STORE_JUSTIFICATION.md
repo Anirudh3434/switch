@@ -43,11 +43,20 @@ extension settings.
 
 ## Data handling (required disclosure)
 
-- Switch does **not** transmit user data to any server in the current version.
-- Session snapshots are stored locally in extension storage.
-- Exported files are encrypted client-side with AES-256-GCM before leaving the
-  device; the key is derived from a user-supplied password. The developer has
-  no access to it.
+- Session snapshots are stored locally in extension storage, encrypted at rest
+  with a key derived from the user's master password.
+- Sync is **optional and manual by default**. Nothing is uploaded just because
+  the user signs in. If the user chooses to sync, only AES-256-GCM ciphertext
+  plus routing metadata (host, version, timestamps, random device id, coarse
+  device label) is sent to the configured server. The server never receives the
+  password, the encryption key, or plaintext cookies.
+- Optional auto-sync is **off by default**. When enabled it requires current
+  consent, an authenticated session, an unlocked vault and a granted origin, and
+  it only touches origins the user granted.
+- Exported files are encrypted client-side before leaving the device. The
+  developer has no access to the key.
+- Feedback submitted through the website stores the message, type and optional
+  email. It does not store the submitter's IP address or user-agent.
 
 ## Single-purpose compliance notes
 
@@ -62,9 +71,11 @@ extension settings.
 
 **"This could be used to steal cookies."**
 It only reads cookies for origins the user has granted through the browser's
-own prompt, only when the user clicks Save, and stores them only on the user's
-device. It cannot run silently in the background — there is no
-`cookies.onChanged` harvester and no `<all_urls>` host permission.
+own prompt, and only when the user clicks Save, Restore or an explicit sync
+action, or has deliberately enabled auto-sync for that granted origin. It cannot
+silently harvest all browsing: there is no `<all_urls>` host permission at
+install. Auto-sync is off by default and requires consent, an unlocked vault and
+a per-origin grant.
 
 **"This facilitates login-restriction circumvention."**
 Malicious-and-prohibited #4 prohibits facilitating *unauthorized* access. The

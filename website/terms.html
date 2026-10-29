@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Terms of Service — Switch</title>
+  <meta name="description" content="Terms for using the pre-release Switch browser extension and optional sync service." />
+  <link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="canvas-ambient">
+    <div class="grid-overlay"></div>
+    <div class="ambient-spot spot-cyan"></div>
+    <div class="ambient-spot spot-violet"></div>
+  </div>
+
+  <header class="masthead legal-header">
+    <div class="container masthead-inner">
+      <a href="index.html" class="brand-entity">
+        <div class="brand-monogram">
+          <img src="assets/icon-128.png" alt="Switch" class="brand-img" width="30" height="30" />
+        </div>
+        <span class="brand-wordmark">Switch</span>
+      </a>
+      <nav class="navigation-cluster">
+        <a href="index.html" class="nav-anchor">Home</a>
+        <a href="about.html" class="nav-anchor">About &amp; How It Works</a>
+        <a href="download.html" class="nav-anchor">Download</a>
+        <a href="support.html" class="nav-anchor">Help &amp; Support</a>
+        <a href="terms.html" class="nav-anchor active">Terms</a>
+      </nav>
+      <div class="masthead-action">
+        <a href="download.html" class="btn btn-primary btn-sm">
+          <span>Download Free</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="legal-doc" id="top">
+    <p class="legal-eyebrow">Legal</p>
+    <h1>Terms of Service</h1>
+    <p class="legal-updated">Last updated: 28 October 2026</p>
+
+    <div class="legal-callout">
+      <strong>Operator notice.</strong> Bracketed items are facts only the
+      deployment operator can supply. Do not publish these terms with
+      placeholder legal details. See the repository's <code>LAUNCH_BLOCKERS.md</code>.
+    </div>
+
+    <h2>1. Who these terms are with</h2>
+    <p>
+      These terms are an agreement between you and
+      <span class="legal-placeholder" data-site-legal-entity>[Legal entity name — not yet configured]</span>
+      ("we", "us"), the operator of the Switch browser extension and any sync
+      service made available with it.
+    </p>
+    <ul>
+      <li>Contact: <span class="legal-placeholder">[CONTACT EMAIL — TO BE CONFIGURED]</span></li>
+      <li>Registered address: <span class="legal-placeholder">[REGISTERED ADDRESS — TO BE CONFIGURED]</span></li>
+    </ul>
+    <p>
+      If you install Switch but do not create an account or use a sync server,
+      the sections about accounts and hosted service do not apply. If you run
+      your own server, your relationship is with yourself; we provide software,
+      not your deployment.
+    </p>
+
+    <h2>2. What Switch is</h2>
+    <p>
+      Switch captures the login state (cookies and web storage) of websites you
+      explicitly grant, encrypts it on your device, and lets you move or share
+      that encrypted state. Sync across devices is optional.
+    </p>
+    <p>
+      Switch is <strong>pre-release software</strong>, supplied for evaluation and
+      personal use. Features may change or be withdrawn.
+    </p>
+    <h3>Supported browsers</h3>
+    <p>
+      Switch currently targets <strong>Chromium-based browsers</strong> (Chrome,
+      Edge, Brave and similar). Firefox is <strong>not supported</strong>: there
+      is no Gecko build and no addons.mozilla.org listing. There is currently
+      <strong>no published store listing</strong> for any browser; installation is
+      from an unpacked developer build unless the operator states otherwise.
+    </p>
+
+    <h2>3. Eligibility and accounts</h2>
+    <ul>
+      <li>You must be old enough to form a binding contract, and at least 13 years old (or the higher minimum digital-consent age where you live).</li>
+      <li>You must provide an email address you control. In production, it must be verified before an account is created.</li>
+      <li>You are responsible for keeping your master password and devices secure.</li>
+      <li>Do not use another person's account without permission.</li>
+    </ul>
+
+    <h2>4. Acceptable use</h2>
+    <p>You agree <strong>not</strong> to:</p>
+    <ul>
+      <li>Capture, transfer or restore sessions for accounts you do not own or have explicit permission to access.</li>
+      <li>Use Switch to bypass access controls, commit fraud, stalk, harass, or infringe anyone's rights.</li>
+      <li>Circumvent a website's technical measures, or use Switch where that site's terms prohibit it.</li>
+      <li>Reverse-engineer, resell, or operate the hosted service as a public relay for third parties without a separate agreement.</li>
+      <li>Probe, overload, or attempt to gain unauthorised access to the sync server.</li>
+      <li>Upload malware or use the feedback channel to distribute unlawful content.</li>
+    </ul>
+    <p>
+      You are responsible for complying with the terms of the websites whose
+      sessions you handle. Many sites prohibit credential or session sharing;
+      Switch does not give you permission to violate their rules.
+    </p>
+
+    <h2>5. Your data and responsibilities</h2>
+    <ul>
+      <li>You retain ownership of your data. You grant us only the limited licence needed to store and transmit encrypted data on your behalf.</li>
+      <li><strong>We cannot recover your data if you lose your master password.</strong></li>
+      <li>You are responsible for backups of anything you cannot afford to lose.</li>
+      <li>Session transfer may fail on sites that bind sessions to a device, IP address, or short-lived token. Passkeys and FIDO2 credentials cannot be transferred.</li>
+      <li>Sharing a session may give the recipient access to the underlying account. Only share with people you trust.</li>
+    </ul>
+
+    <h2>6. Privacy</h2>
+    <p>
+      Our <a href="privacy.html">Privacy Policy</a> explains what is processed and
+      why. It forms part of these terms.
+    </p>
+
+    <h2>7. Availability and changes</h2>
+    <p>
+      The hosted service is provided on an "as available" basis. We may change,
+      suspend or discontinue it, or change limits, with reasonable notice where
+      practicable. We are not obligated to provide any particular uptime, storage
+      quota, or feature.
+    </p>
+    <p>
+      The source code may be modified and self-hosted under the project's
+      licence. We do not support third-party deployments.
+    </p>
+
+    <h2>8. Fees, donations and refunds</h2>
+    <p>
+      The extension is currently provided free of charge. If paid plans are
+      introduced later, the price, billing terms and cancellation policy will be
+      presented before you are charged.
+    </p>
+    <p>
+      Donations are voluntary gifts, not purchases. They are
+      <strong>non-refundable</strong> except where a refund is required by law or
+      was sent in error. A donation does not create an entitlement to support,
+      features, or continued service. Donation details, when configured, are
+      shown on the website.
+    </p>
+    <p class="legal-placeholder">[PAYMENT/TAX DETAILS AND REFUND POLICY — TO BE CONFIGURED IF CHARGING]</p>
+
+    <h2>9. Intellectual property and branding</h2>
+    <p>
+      The Switch name, logo and visual identity are used by the project. Nothing
+      in these terms grants you a right to use the Switch marks in a way that
+      suggests endorsement or affiliation.
+    </p>
+    <p>
+      Third-party browser names and logos (Chrome, Edge, Brave, Firefox, Arc,
+      Vivaldi) are trademarks of their respective owners. Switch is not affiliated
+      with or endorsed by those companies; references are descriptive only.
+    </p>
+    <p>
+      The software licence is stated in the repository's <code>LICENSE</code> file.
+      If no licence file is present in your copy, treat the software as
+      all-rights-reserved and ask the operator before redistributing it.
+    </p>
+    <p class="legal-placeholder">[TRADEMARK REGISTRATION / BRAND OWNERSHIP DETAILS — TO BE CONFIGURED]</p>
+
+    <h2>10. Disclaimers</h2>
+    <p>
+      TO THE MAXIMUM EXTENT PERMITTED BY LAW, SWITCH IS PROVIDED
+      <strong>"AS IS"</strong> AND <strong>"AS AVAILABLE"</strong>, WITHOUT
+      WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING MERCHANTABILITY,
+      FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, AND UNINTERRUPTED OR
+      ERROR-FREE OPERATION.
+    </p>
+    <p>
+      We do not warrant that session transfer will work on any particular
+      website, that a site will not detect or reject a transferred session, or
+      that data will never be lost.
+    </p>
+    <p>Nothing in these terms excludes rights you have under mandatory consumer law.</p>
+
+    <h2>11. Limitation of liability</h2>
+    <p>
+      TO THE MAXIMUM EXTENT PERMITTED BY LAW, WE ARE NOT LIABLE FOR INDIRECT,
+      INCIDENTAL, SPECIAL, CONSEQUENTIAL OR PUNITIVE DAMAGES, OR FOR LOST PROFITS,
+      LOST DATA, LOSS OF ACCOUNT ACCESS, OR BUSINESS INTERRUPTION ARISING FROM YOUR
+      USE OF SWITCH.
+    </p>
+    <p>
+      OUR TOTAL LIABILITY FOR ALL CLAIMS RELATING TO THE SERVICE IS LIMITED TO THE
+      GREATER OF (A) THE AMOUNT YOU PAID US IN THE TWELVE MONTHS BEFORE THE CLAIM,
+      OR (B) <span class="legal-placeholder">[LIABILITY FLOOR AMOUNT — TO BE CONFIGURED]</span>.
+    </p>
+    <p>
+      This does not limit liability that cannot be limited by law, including for
+      fraud, wilful misconduct, death or personal injury caused by negligence.
+    </p>
+
+    <h2>12. Indemnity</h2>
+    <p>
+      To the extent permitted by law, you will indemnify us against claims
+      arising from your misuse of Switch, your violation of these terms, or your
+      handling of sessions you were not authorised to access.
+    </p>
+
+    <h2>13. Termination</h2>
+    <p>
+      You may stop using Switch at any time and delete your account from the
+      extension. We may suspend or terminate access if you materially breach
+      these terms, if required by law, or to protect the service or other users.
+      Where practicable we will explain why.
+    </p>
+    <p>
+      On termination, we may delete account data in line with the Privacy Policy.
+      Sections that by their nature should survive (including disclaimers,
+      liability limits, indemnity and governing law) survive termination.
+    </p>
+
+    <h2>14. Governing law and disputes</h2>
+    <p>
+      These terms are governed by the laws of
+      <span class="legal-placeholder" data-site-governing-law>[Governing law / jurisdiction — not yet configured]</span>,
+      without regard to conflict-of-law rules. Courts in
+      <span class="legal-placeholder">[VENUE — TO BE CONFIGURED]</span> have
+      exclusive jurisdiction, except where mandatory consumer law gives you the
+      right to sue in your local courts.
+    </p>
+    <p>
+      Before filing a claim, contact us at
+      <span class="legal-placeholder">[CONTACT EMAIL — TO BE CONFIGURED]</span>
+      and give us 30 days to try to resolve the issue.
+    </p>
+
+    <h2>15. Changes to these terms</h2>
+    <p>
+      We may update these terms. Material changes will be notified in the
+      extension or on the website with a new effective date. Continued use after
+      the effective date means you accept the updated terms. If you do not agree,
+      stop using Switch and delete your account.
+    </p>
+
+    <h2>16. Miscellaneous</h2>
+    <ul>
+      <li><strong>Entire agreement.</strong> These terms and the Privacy Policy are the whole agreement about the hosted service.</li>
+      <li><strong>Severability.</strong> If a provision is unenforceable, the rest remains in effect.</li>
+      <li><strong>No waiver.</strong> Failing to enforce a provision is not a waiver.</li>
+      <li><strong>Assignment.</strong> You may not assign these terms without our consent; we may assign them as part of a reorganisation or sale, subject to applicable law.</li>
+      <li><strong>Force majeure.</strong> We are not liable for delays caused by events beyond our reasonable control.</li>
+    </ul>
+
+    <h2>17. Contact</h2>
+    <p>
+      <span class="legal-placeholder">[CONTACT EMAIL — TO BE CONFIGURED]</span><br />
+      <span class="legal-placeholder">[REGISTERED ADDRESS — TO BE CONFIGURED]</span>
+    </p>
+  </main>
+
+  <footer class="colophon">
+    <div class="container colophon-bottom">
+      <div class="colophon-legal-text">
+        <span>&copy; 2026 Switch Project contributors. Released under the MIT License. Optional sync stores only encrypted data; no analytics or advertising trackers.</span>
+      </div>
+      <div class="colophon-bottom-links">
+        <a href="privacy.html" class="colophon-bottom-link">Privacy Policy</a>
+        <span class="bullet-sep">&bull;</span>
+        <a href="terms.html" class="colophon-bottom-link">Terms of Service</a>
+        <span class="bullet-sep">&bull;</span>
+        <a href="support.html" class="colophon-bottom-link">Support Desk</a>
+        <button class="back-to-top-btn" id="backToTopBtn" type="button" title="Back to top">
+          <span>Top</span>
+        </button>
+      </div>
+    </div>
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

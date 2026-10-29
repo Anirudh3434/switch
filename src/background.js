@@ -1,5 +1,12 @@
 // MV3 service worker — message router.
 // Runs up to ~30s idle / 5min max, so no long-lived work here.
+//
+// PRIVACY CONTRACT
+// ----------------
+// Nothing is uploaded automatically. Login/registration only registers the
+// device. Session uploads happen when the user explicitly saves or syncs a
+// site, or when they have separately enabled opt-in auto-sync for sites they
+// granted. The cookie watcher is inert by default.
 
 import {
   captureSite,
@@ -12,6 +19,9 @@ import {
   markRejectedShown,
   neverAsk,
   setDetectEnabled,
+  grantedHosts,
+  grantSite,
+  revokeSite,
 } from './lib/snapshot.js';
 import { pack, unpack } from './lib/crypto.js';
 import {
@@ -32,16 +42,19 @@ import {
   getAuthStatus,
   refreshSession,
   getValidAccessToken,
+  getServerUrl,
   setServerUrl,
+  deleteAccount,
+  exportUserData,
   isAuthToken,
 } from './lib/auth.js';
 import { applyCookies } from './lib/cookies.js';
 import {
   isLocalhost,
-  isSearchEngine,
   registerDevice,
   fetchUserDevices,
   revokeDevice,
+  adoptDevice,
   getOrCreateDeviceId,
   getOrCreateSystemId,
   detectDeviceEnvironment,
@@ -50,6 +63,7 @@ import {
   pushBatchDomainSessions,
   deleteDomainSessionFromServer,
 } from './lib/device.js';
+import { getRegistrableDomain, hostMatches, normalizeHost } from './lib/domain.js';
 import {
   saveSwapRecord,
   getSwapRecord,
@@ -58,7 +72,6 @@ import {
   isDomainSwapped,
 } from './lib/swap-store.js';
 
-// Debug logging - disabled in production
 const DEBUG = false;
 const log = (...args) => {
   if (DEBUG) console.log('[switch]', ...args);
@@ -70,13 +83,11 @@ const error = (...args) => {
   console.error('[switch]', ...args);
 };
 
-// First install, or an update that changed the disclosure wording -> open the
-// onboarding tab so consent is obtained BEFORE any data is handled.
-// (Disclosure Requirements #2: consent prior to data handling.)
+const AUTO_SYNC_KEY = 'autoSyncEnabled';
+
 chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   if (reason !== 'install' && reason !== 'update') return;
   if (await isConsented()) return;
-
   await chrome.tabs.create({
     url: chrome.runtime.getURL('src/onboarding/onboarding.html'),
   });
@@ -87,7 +98,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     .then((result) => sendResponse({ ok: true, ...result }))
     .catch((e) => {
       const errMsg = String(e?.message || e);
-      const isRateLimited = e?.code === 'rate_limited' || errMsg.includes('rate_limited') || errMsg.includes('Too many requests');
+      const isRateLimited =
+        e?.code === 'rate_limited' ||
+        errMsg.includes('rate_limited') ||
+        errMsg.includes('Too many requests');
       sendResponse({
         ok: false,
         error: errMsg,
@@ -95,37 +109,48 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         retryAfterSeconds: e?.retryAfterSeconds || (isRateLimited ? 60 : undefined),
       });
     });
-  return true; // keep the channel open for the async response
+  return true;
 });
 
-/**
- * Remote vault lookup. Returns null when the user isn't signed in or no server
- * is configured — the caller treats that as "no remote session" and stays
- * silent about it. Wired to the /v1/sync/list endpoint once auth lands.
- */
-async function remoteHasSession(host) {
-  try {
-    const { serverUrl, accessToken } = await chrome.storage.local.get([
-      'serverUrl',
-      'accessToken',
-    ]);
-    if (!serverUrl || !accessToken) return false;
+/** Does the vault key exist for this browser session? */
+async function vaultUnlocked() {
+  const { vaultKeyRaw } = await chrome.storage.session.get('vaultKeyRaw');
+  return Array.isArray(vaultKeyRaw) && vaultKeyRaw.length === 32;
+}
 
-    const res = await fetch(`${serverUrl}/v1/sync/list`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    if (!res.ok) return false;
-    const { items } = await res.json();
-    return (items || []).some((i) => i.host === host);
-  } catch {
-    return false; // offline / server down must never block the page
+/** Returns { serverUrl, accessToken } or null. Never uses a hidden fallback. */
+async function authContext() {
+  let accessToken = await getValidAccessToken();
+  if (!accessToken) {
+    const refreshed = await refreshSession().catch(() => null);
+    accessToken = refreshed?.accessToken;
   }
+  if (!accessToken) return null;
+  const serverUrl = await getServerUrl();
+  return { serverUrl, accessToken };
 }
 
 /**
- * Broadcasts the DevTools Inspect & Suction Warp animation to the currently active web tab.
- * Dynamically injects the content script if the tab hasn't loaded it yet.
+ * Cheap presence check for the login detector. Uses /v1/sync/list (no payload
+ * decryption) so a locked vault does not suppress the "you have a session"
+ * prompt.
  */
+async function remoteHasSession(host) {
+  try {
+    const ctx = await authContext();
+    if (!ctx) return false;
+
+    const res = await fetch(`${ctx.serverUrl}/v1/sync/list`, {
+      headers: { Authorization: `Bearer ${ctx.accessToken}` },
+    });
+    if (!res.ok) return false;
+    const { items } = await res.json();
+    return (items || []).some((i) => hostMatches(i.host, host));
+  } catch {
+    return false;
+  }
+}
+
 async function broadcastSyncAnimationToActiveTab(domain, cookies) {
   try {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -148,17 +173,20 @@ async function broadcastSyncAnimationToActiveTab(domain, cookies) {
         cookies,
       });
     } catch {
-      // If content script was not already present, inject dynamically and replay
       if (chrome.scripting && chrome.scripting.executeScript) {
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files: ['src/content/inspect-sync-animation.js'],
-        }).catch(() => {});
-        await chrome.tabs.sendMessage(tab.id, {
-          type: 'PLAY_SYNC_INSPECT_ANIMATION',
-          domain,
-          cookies,
-        }).catch(() => {});
+        await chrome.scripting
+          .executeScript({
+            target: { tabId: tab.id },
+            files: ['src/content/inspect-sync-animation.js'],
+          })
+          .catch(() => {});
+        await chrome.tabs
+          .sendMessage(tab.id, {
+            type: 'PLAY_SYNC_INSPECT_ANIMATION',
+            domain,
+            cookies,
+          })
+          .catch(() => {});
       }
     }
   } catch (e) {
@@ -166,11 +194,13 @@ async function broadcastSyncAnimationToActiveTab(domain, cookies) {
   }
 }
 
-/**
- * Broadcasts the rich holographic token key swap animation to the target tab.
- * Dynamically injects swap-animation.js if not yet present.
- */
-async function broadcastSwapKeyAnimation(tabId, domain, originDevice, targetDevice, isRollback = false) {
+async function broadcastSwapKeyAnimation(
+  tabId,
+  domain,
+  originDevice,
+  targetDevice,
+  isRollback = false,
+) {
   if (!tabId) return;
   const payload = {
     type: 'PLAY_SWAP_TOKEN_ANIMATION',
@@ -185,10 +215,12 @@ async function broadcastSwapKeyAnimation(tabId, domain, originDevice, targetDevi
       await chrome.tabs.sendMessage(tabId, payload);
     } catch {
       if (chrome.scripting && chrome.scripting.executeScript) {
-        await chrome.scripting.executeScript({
-          target: { tabId },
-          files: ['src/content/swap-animation.js'],
-        }).catch(() => {});
+        await chrome.scripting
+          .executeScript({
+            target: { tabId },
+            files: ['src/content/swap-animation.js'],
+          })
+          .catch(() => {});
         await chrome.tabs.sendMessage(tabId, payload).catch(() => {});
       }
     }
@@ -197,107 +229,158 @@ async function broadcastSwapKeyAnimation(tabId, domain, originDevice, targetDevi
   }
 }
 
+/**
+ * Upload the given hosts only.
+ *
+ * `hosts` is required and must be a non-empty array. There is no "upload every
+ * cookie in the browser" path; callers derive the list from an explicit user
+ * action (granted sites or a single site).
+ */
+async function syncHosts(serverUrl, accessToken, hosts) {
+  const wanted = new Set(
+    (hosts || []).map((h) => normalizeHost(h)).filter(Boolean),
+  );
+  if (!wanted.size) {
+    return { ok: true, syncedCount: 0, totalCookiesCount: 0, conflicts: [] };
+  }
+
+  const allCookies = await chrome.cookies.getAll({});
+  const byHost = new Map();
+  for (const c of allCookies || []) {
+    const host = normalizeHost(c.domain);
+    if (!host || isLocalhost(host) || !wanted.has(host)) continue;
+    if (!byHost.has(host)) byHost.set(host, []);
+    byHost.get(host).push(c);
+  }
+
+  // Use the server's current version so a deliberate re-save supersedes the
+  // previous copy instead of being reported as a spurious conflict.
+  const versions = await currentVersions(serverUrl, accessToken);
+
+  const domainList = [...byHost.entries()].map(([host, cookies]) => ({
+    host,
+    cookies,
+    baseVersion: versions.get(host) ?? 0,
+  }));
+
+  const res = await pushBatchDomainSessions(serverUrl, accessToken, domainList);
+
+  return {
+    ok: true,
+    syncedCount: res.syncedCount,
+    totalCookiesCount: allCookies.length,
+    conflicts: res.conflicts || [],
+    hosts: domainList.map((d) => d.host),
+  };
+}
+
+/** host -> version for all of this user's non-deleted sessions. */
+async function currentVersions(serverUrl, accessToken) {
+  const map = new Map();
+  try {
+    const res = await fetch(`${serverUrl}/v1/sync/list`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return map;
+    const data = await res.json();
+    for (const item of data.items || []) {
+      map.set(normalizeHost(item.host), item.version);
+    }
+  } catch {
+    // Offline: baseVersion 0 will conflict against any existing copy, which is
+    // the safe outcome for a sync we cannot verify.
+  }
+  return map;
+}
+
 async function handle(msg, sender) {
   switch (msg.type) {
-    case 'CAPTURE':
+    case 'CAPTURE': {
+      if (!(await isConsented())) throw new Error('Consent is required before saving a session.');
       return { snapshot: await captureSite(msg.url, msg.tabId) };
+    }
 
     case 'RESTORE':
       return { result: await restoreSite(msg.host, msg.tabId) };
 
-    // Fired from the in-page toast. Resolve the tab from the sender instead of
-    // trusting a tabId that could come from anywhere.
     case 'RESTORE_FROM_PAGE': {
       const tabId = sender?.tab?.id;
       const result = await restoreSite(msg.host, tabId);
       return { result };
     }
+
     case 'GET_ACTIVE_TAB_SWAP_INFO': {
       let tab = sender?.tab;
       if (!tab) {
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
         tab = tabs[0];
       }
-      if (!tab?.url || tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('about:') || tab.url.startsWith('chrome-extension://')) {
+      if (
+        !tab?.url ||
+        tab.url.startsWith('chrome://') ||
+        tab.url.startsWith('edge://') ||
+        tab.url.startsWith('about:') ||
+        tab.url.startsWith('chrome-extension://')
+      ) {
         return { ok: false, reason: 'internal_page' };
       }
 
       let host = '';
       try {
-        host = new URL(tab.url).hostname.replace(/^\./, '').toLowerCase().trim();
+        host = normalizeHost(new URL(tab.url).hostname);
       } catch {
         return { ok: false, reason: 'invalid_url' };
       }
+      if (isLocalhost(host)) return { ok: false, reason: 'ignored_host' };
 
-      if (isLocalhost(host) || isSearchEngine(host)) {
-        return { ok: false, reason: 'ignored_host' };
-      }
-
-      // 1. Query DOM page state from content script if not already passed in msg
       let pageState = msg.pageState || { hasLoginForm: false, looksLoggedIn: false };
       if (!msg.pageState && !sender?.tab) {
         try {
-          const domState = await chrome.tabs.sendMessage(tab.id, { type: 'DETECT_PAGE_STATE' });
+          const domState = await chrome.tabs.sendMessage(tab.id, {
+            type: 'DETECT_PAGE_STATE',
+          });
           if (domState) pageState = domState;
         } catch {}
       }
 
-      // 2. Query local cookies for this domain
-      const rootDomain = host.split('.').slice(-2).join('.');
       const allCookies = await chrome.cookies.getAll({});
-      const hostCookies = allCookies.filter((c) => {
-        const d = String(c.domain || '').replace(/^\./, '').toLowerCase().trim();
-        return d === host || d === rootDomain || host.endsWith('.' + d);
-      });
+      const hostCookies = allCookies.filter((c) =>
+        hostMatches(c.domain, host),
+      );
 
       const currentDeviceId = await getOrCreateDeviceId();
       const hasLocalAuth = hostCookies.some((c) => isAuthToken(c.name, c.value));
-      // User is logged in only if they have auth tokens / look logged in, and are NOT actively sitting on a login/signup form
-      const isUserAlreadyLoggedIn = !pageState.hasLoginForm && (hasLocalAuth || pageState.looksLoggedIn || hostCookies.length > 5);
+      const isUserAlreadyLoggedIn =
+        !pageState.hasLoginForm &&
+        (hasLocalAuth || pageState.looksLoggedIn || hostCookies.length > 5);
 
-      // 3. Find other device's session for this domain
-      const { serverUrl } = await chrome.storage.local.get('serverUrl');
-      const accessToken = await getValidAccessToken();
       let otherDeviceSession = null;
-
-      if (accessToken) {
-        try {
-          const sessions = await fetchRemoteSessions(serverUrl || 'http://localhost:8080', accessToken);
-          const match = sessions.find((s) => {
-            const sh = String(s.host || '').replace(/^\./, '').toLowerCase().trim();
-            const sameHost = sh === host || sh === rootDomain || host.endsWith('.' + sh) || sh.endsWith('.' + host);
-            if (!sameHost || !Array.isArray(s.cookies) || s.cookies.length === 0) return false;
-
-            // Sessions must come from ANOTHER device/browser.
-            // Never recommend a session that was saved by the current device itself (which was either already logged out or is currently active).
-            if (s.deviceId && s.deviceId === currentDeviceId) {
-              return false;
-            }
-
-            // Must contain at least one valid auth/session token (not just empty tracking cookies)
-            const hasAuthTokens = s.cookies.some((c) => isAuthToken(c.name, c.value));
-            if (!hasAuthTokens) {
-              return false;
-            }
-
-            return true;
-          });
-          if (match) otherDeviceSession = match;
-        } catch (e) {
-          console.warn('[switch] fetchRemoteSessions in swap info error:', e);
+      if (await vaultUnlocked()) {
+        const ctx = await authContext();
+        if (ctx) {
+          try {
+            const sessions = await fetchRemoteSessions(ctx.serverUrl, ctx.accessToken);
+            const match = sessions.find((s) => {
+              if (!hostMatches(s.host, host)) return false;
+              if (!Array.isArray(s.cookies) || s.cookies.length === 0) return false;
+              if (s.deviceId && s.deviceId === currentDeviceId) return false;
+              return s.cookies.some((c) => isAuthToken(c.name, c.value));
+            });
+            if (match) otherDeviceSession = match;
+          } catch (e) {
+            console.warn('[switch] remote session lookup failed:', e?.message || e);
+          }
         }
       }
 
-      // 4. Check persistent swap record collection for this domain
-      const swapRecord = await getSwapRecord(rootDomain || host);
+      const swapKey = getRegistrableDomain(host) || host;
+      const swapRecord = await getSwapRecord(swapKey);
       const isSwapped = !!swapRecord;
-      const isLocked = isSwapped; // Chained 3rd-device/browser swap is locked while swapped
 
-      // Formulate backward-compatible backupSession
       const backupSession = swapRecord
         ? {
             host: swapRecord.host || host,
-            rootDomain,
+            rootDomain: swapKey,
             originalCookies: swapRecord.origin?.cookies || [],
             swappedWithDevice: swapRecord.target?.deviceName || 'Remote Session',
             swappedAt: swapRecord.swappedAt || Date.now(),
@@ -322,73 +405,92 @@ async function handle(msg, sender) {
         backupSession,
         swapRecord,
         isSwapped,
-        isLocked,
+        isLocked: isSwapped,
       };
     }
 
     case 'SWAP_ACTIVE_TAB_SESSION': {
-      const { host, currentCookies, remoteCookies, tabId, baseVersion, deviceName, targetDeviceId, isInjectOnly } = msg;
-      if (!host || isLocalhost(host) || isSearchEngine(host)) {
-        return { ok: false, error: 'Cannot swap sessions on search engines or localhost' };
-      }
-      const targetTabId = tabId || sender?.tab?.id;
-      const rootDomain = host.split('.').slice(-2).join('.');
+      const {
+        host,
+        currentCookies,
+        remoteCookies,
+        tabId,
+        baseVersion,
+        deviceName,
+        targetDeviceId,
+        isInjectOnly,
+      } = msg;
 
-      // STRICT SWAP GUARD: Disallow swapping if domain is already swapped with a device/browser.
-      // Must rollback first before swapping again.
-      const existingSwap = await getSwapRecord(rootDomain);
+      const cleanHost = normalizeHost(host);
+      if (!cleanHost || isLocalhost(cleanHost)) {
+        return { ok: false, error: 'Cannot swap sessions on localhost' };
+      }
+
+      const targetTabId = tabId || sender?.tab?.id;
+      const swapKey = getRegistrableDomain(cleanHost) || cleanHost;
+
+      const existingSwap = await getSwapRecord(swapKey);
       if (existingSwap) {
         return {
           ok: false,
-          error: `This domain is currently swapped with "${existingSwap.target?.deviceName || 'another device'}". You must Rollback before swapping with another device or browser.`,
+          error: `This domain is currently swapped with "${
+            existingSwap.target?.deviceName || 'another device'
+          }". You must Rollback before swapping with another device or browser.`,
           isLocked: true,
           swapRecord: existingSwap,
         };
       }
 
-      // 1. Gather current cookies if not provided
       let cookiesToBackup = currentCookies;
       if (!Array.isArray(cookiesToBackup) || cookiesToBackup.length === 0) {
         const allCookies = await chrome.cookies.getAll({});
-        cookiesToBackup = allCookies.filter((c) => {
-          const d = String(c.domain || '').replace(/^\./, '').toLowerCase().trim();
-          return d === host || d === rootDomain || host.endsWith('.' + d);
-        });
+        cookiesToBackup = allCookies.filter((c) =>
+          hostMatches(c.domain, cleanHost),
+        );
       }
 
-      // 2. Resolve remote cookies & target device info
-      const { serverUrl } = await chrome.storage.local.get('serverUrl');
-      const accessToken = await getValidAccessToken();
+      const ctx = await authContext();
       let cookiesToApply = remoteCookies;
       let finalTargetDeviceId = targetDeviceId || '';
       let finalTargetDeviceName = deviceName || 'Remote Device';
 
-      if (!Array.isArray(cookiesToApply) || cookiesToApply.length === 0 || !finalTargetDeviceId) {
-        if (accessToken) {
-          const sessions = await fetchRemoteSessions(serverUrl || 'http://localhost:8080', accessToken).catch(() => []);
-          const currentDeviceId = await getOrCreateDeviceId();
-          const match = sessions.find((s) => {
-            const sh = String(s.host || '').replace(/^\./, '').toLowerCase().trim();
-            const sameHost = sh === host || sh === rootDomain || host.endsWith('.' + sh) || sh.endsWith('.' + host);
-            return sameHost && s.deviceId && s.deviceId !== currentDeviceId && Array.isArray(s.cookies) && s.cookies.length > 0;
-          });
-          if (match) {
-            if (!Array.isArray(cookiesToApply) || cookiesToApply.length === 0) {
-              cookiesToApply = match.cookies;
-            }
-            if (!finalTargetDeviceId) finalTargetDeviceId = match.deviceId;
-            if (!finalTargetDeviceName || finalTargetDeviceName === 'Remote Device') {
-              finalTargetDeviceName = match.deviceName || 'Remote Device';
-            }
+      if (
+        (!Array.isArray(cookiesToApply) || cookiesToApply.length === 0 || !finalTargetDeviceId) &&
+        ctx &&
+        (await vaultUnlocked())
+      ) {
+        const sessions = await fetchRemoteSessions(ctx.serverUrl, ctx.accessToken).catch(
+          () => [],
+        );
+        const currentDeviceId = await getOrCreateDeviceId();
+        const match = sessions.find((s) => {
+          return (
+            hostMatches(s.host, cleanHost) &&
+            s.deviceId &&
+            s.deviceId !== currentDeviceId &&
+            Array.isArray(s.cookies) &&
+            s.cookies.length > 0
+          );
+        });
+        if (match) {
+          if (!Array.isArray(cookiesToApply) || cookiesToApply.length === 0) {
+            cookiesToApply = match.cookies;
+          }
+          if (!finalTargetDeviceId) finalTargetDeviceId = match.deviceId;
+          if (!finalTargetDeviceName || finalTargetDeviceName === 'Remote Device') {
+            finalTargetDeviceName = match.deviceName || 'Remote Device';
           }
         }
       }
 
-      // 3. Save into Persistent Swap Store Collection (skipped if isInjectOnly)
       let swapRecord = null;
-      if (!isInjectOnly && Array.isArray(cookiesToBackup) && cookiesToBackup.length > 0) {
+      if (
+        !isInjectOnly &&
+        Array.isArray(cookiesToBackup) &&
+        cookiesToBackup.length > 0
+      ) {
         swapRecord = await saveSwapRecord({
-          host,
+          host: cleanHost,
           currentCookies: cookiesToBackup,
           remoteCookies: cookiesToApply || [],
           targetDeviceId: finalTargetDeviceId,
@@ -396,43 +498,50 @@ async function handle(msg, sender) {
         });
       }
 
-      // 4. Push current browser cookies to cloud so the other device/browser has them (skipped if isInjectOnly or no auth tokens)
-      const hasAuthTokensToPush = Array.isArray(cookiesToBackup) && cookiesToBackup.some((c) => isAuthToken(c.name, c.value));
-      if (!isInjectOnly && accessToken && hasAuthTokensToPush) {
+      // Push the outgoing session only when the user has granted this site and
+      // the vault is unlocked. A swap is an explicit action, so this is allowed
+      // — but it is never a background upload.
+      const hasAuthTokensToPush =
+        Array.isArray(cookiesToBackup) &&
+        cookiesToBackup.some((c) => isAuthToken(c.name, c.value));
+      if (!isInjectOnly && ctx && hasAuthTokensToPush && (await vaultUnlocked())) {
         await pushDomainSession(
-          serverUrl || 'http://localhost:8080',
-          accessToken,
-          host,
+          ctx.serverUrl,
+          ctx.accessToken,
+          cleanHost,
           cookiesToBackup,
           baseVersion || 0,
-        ).catch(() => {});
+        ).catch((e) => console.warn('[switch] swap push failed:', e?.message || e));
       }
 
-      // Trigger futuristic holographic token swap animation on target tab
       const swapAnimPromise = broadcastSwapKeyAnimation(
         targetTabId,
-        host,
+        cleanHost,
         'Local Browser',
         finalTargetDeviceName,
-        false
+        false,
       );
 
-      // 5. Cleanly isolate session: Clear old domain cookies and web storage before applying remote cookies
       if (Array.isArray(cookiesToApply) && cookiesToApply.length > 0) {
-        await removeDomainCookies(rootDomain, false);
+        await removeDomainCookies(swapKey, false);
         if (targetTabId && chrome.scripting && chrome.scripting.executeScript) {
-          await chrome.scripting.executeScript({
-            target: { tabId: targetTabId },
-            func: () => {
-              try { localStorage.clear(); } catch {}
-              try { sessionStorage.clear(); } catch {}
-            },
-          }).catch(() => {});
+          await chrome.scripting
+            .executeScript({
+              target: { tabId: targetTabId },
+              func: () => {
+                try {
+                  localStorage.clear();
+                } catch {}
+                try {
+                  sessionStorage.clear();
+                } catch {}
+              },
+            })
+            .catch(() => {});
         }
         await applyCookies(cookiesToApply);
       }
 
-      // 6. Await rich key animation completion before reloading active tab
       await Promise.all([
         swapAnimPromise,
         new Promise((r) => setTimeout(r, 2100)),
@@ -448,44 +557,47 @@ async function handle(msg, sender) {
     case 'RESTORE_SWAP_BACKUP': {
       const { host, tabId } = msg;
       const targetTabId = tabId || sender?.tab?.id;
-      const rootDomain = host.split('.').slice(-2).join('.');
+      const cleanHost = normalizeHost(host);
+      const swapKey = getRegistrableDomain(cleanHost) || cleanHost;
 
-      // 1. Retrieve persistent swap record
-      const swapRecord = (await getSwapRecord(rootDomain || host));
-      const originalCookies = swapRecord?.origin?.cookies || swapRecord?.originalCookies;
+      const swapRecord = await getSwapRecord(swapKey);
+      const originalCookies =
+        swapRecord?.origin?.cookies || swapRecord?.originalCookies;
 
       if (!swapRecord || !Array.isArray(originalCookies) || originalCookies.length === 0) {
-        throw new Error('No active swap record or original cookies found to rollback for this domain');
+        throw new Error(
+          'No active swap record or original cookies found to rollback for this domain',
+        );
       }
 
-      // Trigger rollback key animation
       const restoreAnimPromise = broadcastSwapKeyAnimation(
         targetTabId,
-        host,
+        cleanHost,
         swapRecord?.target?.deviceName || 'Remote Device',
         swapRecord?.origin?.deviceName || 'Original Session',
-        true
+        true,
       );
 
-      // 2. Clear current swapped cookies and web storage from browser (without tab reload)
-      await removeDomainCookies(rootDomain, false);
+      await removeDomainCookies(swapKey, false);
       if (targetTabId && chrome.scripting && chrome.scripting.executeScript) {
-        await chrome.scripting.executeScript({
-          target: { tabId: targetTabId },
-          func: () => {
-            try { localStorage.clear(); } catch {}
-            try { sessionStorage.clear(); } catch {}
-          },
-        }).catch(() => {});
+        await chrome.scripting
+          .executeScript({
+            target: { tabId: targetTabId },
+            func: () => {
+              try {
+                localStorage.clear();
+              } catch {}
+              try {
+                sessionStorage.clear();
+              } catch {}
+            },
+          })
+          .catch(() => {});
       }
 
-      // 3. Exactly replace original cookies into the cookies store
       await applyCookies(originalCookies);
+      await removeSwapRecord(swapKey);
 
-      // 4. Remove the record from the persistent collection (clean slate)
-      await removeSwapRecord(rootDomain);
-
-      // 5. Await key animation before reloading cleanly into original session
       await Promise.all([
         restoreAnimPromise,
         new Promise((r) => setTimeout(r, 2100)),
@@ -498,7 +610,7 @@ async function handle(msg, sender) {
       return {
         ok: true,
         restoredCount: originalCookies.length,
-        removedRecord: rootDomain,
+        removedRecord: swapKey,
         message: 'Original cookies restored and swap record removed.',
       };
     }
@@ -525,8 +637,6 @@ async function handle(msg, sender) {
       await setDetectEnabled(msg.enabled);
       return {};
 
-    // Handshake. The popup compares PROTOCOL to detect a stale worker (see the
-    // comment on PROTOCOL in lib/consent.js).
     case 'PING':
       return { protocol: PROTOCOL };
 
@@ -553,6 +663,7 @@ async function handle(msg, sender) {
       return { sessions: await listSaved() };
 
     case 'DELETE':
+      // Local delete only. Cloud deletion is a separate explicit action.
       await deleteSaved(msg.host);
       return {};
 
@@ -560,9 +671,8 @@ async function handle(msg, sender) {
       return { snapshot: await getSnapshot(msg.host) };
 
     case 'EXPORT': {
-      // Encrypt locally. The file that leaves this machine is opaque.
       const snapshots = [];
-      for (const host of msg.hosts) {
+      for (const host of msg.hosts || []) {
         const s = await getSnapshot(host);
         if (s) snapshots.push(s);
       }
@@ -587,11 +697,12 @@ async function handle(msg, sender) {
 
     case 'AUTH_LOGIN': {
       const auth = await login(msg.email, msg.password, msg.serverUrl);
+      // Register the device only. Uploading sessions now would be an
+      // undisclosed background upload; the user syncs a site explicitly.
       try {
-        await registerDevice(msg.serverUrl || 'http://localhost:8080', auth.accessToken);
-        await syncAllBrowserCookies(msg.serverUrl || 'http://localhost:8080', auth.accessToken);
+        await registerDevice(await getServerUrl(), auth.accessToken);
       } catch (e) {
-        console.warn('[switch] device registration/sync after login:', e.message);
+        console.warn('[switch] device registration after login:', e?.message || e);
       }
       return auth;
     }
@@ -602,17 +713,15 @@ async function handle(msg, sender) {
         otp: msg.otp,
       });
       try {
-        await registerDevice(msg.serverUrl || 'http://localhost:8080', auth.accessToken);
-        await syncAllBrowserCookies(msg.serverUrl || 'http://localhost:8080', auth.accessToken);
+        await registerDevice(await getServerUrl(), auth.accessToken);
       } catch (e) {
-        console.warn('[switch] device registration/sync after register:', e.message);
+        console.warn('[switch] device registration after register:', e?.message || e);
       }
       return auth;
     }
 
-    case 'AUTH_FORGOT_PASSWORD': {
+    case 'AUTH_FORGOT_PASSWORD':
       return await forgotPassword(msg.email, msg.serverUrl);
-    }
 
     case 'AUTH_RESET_PASSWORD': {
       const auth = await resetPassword(msg.email, msg.newPassword, msg.serverUrl, {
@@ -620,17 +729,14 @@ async function handle(msg, sender) {
         otp: msg.otp,
       });
       try {
-        await registerDevice(msg.serverUrl || 'http://localhost:8080', auth.accessToken);
-        await syncAllBrowserCookies(msg.serverUrl || 'http://localhost:8080', auth.accessToken);
+        await registerDevice(await getServerUrl(), auth.accessToken);
       } catch (e) {
-        console.warn('[switch] device registration/sync after reset:', e.message);
+        console.warn('[switch] device registration after reset:', e?.message || e);
       }
       return auth;
     }
 
     case 'AUTH_LOGOUT': {
-      // Do NOT clear system browser cookies on logout.
-      // Clear backend DB sessions/tokens for this user and wipe local extension storage keys.
       await logout();
       return { ok: true };
     }
@@ -641,51 +747,43 @@ async function handle(msg, sender) {
     case 'AUTH_SET_SERVER':
       return { serverUrl: await setServerUrl(msg.serverUrl) };
 
-async function syncAllBrowserCookies(serverUrl, accessToken) {
-  try {
-    const allCookies = await chrome.cookies.getAll({});
-    const filtered = (allCookies || []).filter(
-      (c) => c.domain && !isLocalhost(c.domain)
-    );
+    case 'SETTINGS_GET': {
+      const { [AUTO_SYNC_KEY]: autoSync = false, detectEnabled = true } =
+        await chrome.storage.local.get([AUTO_SYNC_KEY, 'detectEnabled']);
+      return {
+        autoSync: !!autoSync,
+        detectEnabled: detectEnabled !== false,
+        serverUrl: await getServerUrl(),
+        grantedHosts: await grantedHosts(),
+      };
+    }
 
-    const domainMap = new Map();
-    for (const c of filtered) {
-      const d = String(c.domain || '').replace(/^\./, '').toLowerCase().trim();
-      if (!d) continue;
-      if (!domainMap.has(d)) {
-        domainMap.set(d, []);
+    case 'SETTINGS_SET': {
+      const updates = {};
+      if (msg.autoSync !== undefined) updates[AUTO_SYNC_KEY] = !!msg.autoSync;
+      if (msg.detectEnabled !== undefined) {
+        updates.detectEnabled = !!msg.detectEnabled;
+        await setDetectEnabled(!!msg.detectEnabled);
       }
-      domainMap.get(d).push(c);
+      if (Object.keys(updates).length) {
+        await chrome.storage.local.set(updates);
+      }
+      return {
+        autoSync: !!updates[AUTO_SYNC_KEY],
+        detectEnabled: updates.detectEnabled !== false,
+      };
     }
 
-    const domainList = Array.from(domainMap.entries()).map(([host, cookies]) => ({
-      host,
-      cookies,
-      baseVersion: 0,
-    }));
+    case 'ACCOUNT_EXPORT':
+      return { data: await exportUserData() };
 
-    if (domainList.length === 0) {
-      return { ok: true, syncedCount: 0, totalCookiesCount: 0 };
+    case 'ACCOUNT_DELETE': {
+      if (msg.confirm !== true) {
+        throw new Error('Account deletion requires explicit confirmation.');
+      }
+      await deleteAccount();
+      return { ok: true };
     }
-
-    const res = await pushBatchDomainSessions(
-      serverUrl || 'http://localhost:8080',
-      accessToken,
-      domainList,
-    );
-
-    return {
-      ok: true,
-      syncedCount: res.syncedCount,
-      totalCookiesCount: filtered.length,
-      domainList,
-      filtered,
-    };
-  } catch (e) {
-    console.warn('[switch] syncAllBrowserCookies error:', e);
-    return { ok: false, error: e.message };
-  }
-}
 
     case 'DEVICE_GET_CURRENT': {
       const deviceId = await getOrCreateDeviceId();
@@ -695,17 +793,17 @@ async function syncAllBrowserCookies(serverUrl, accessToken) {
     }
 
     case 'DEVICE_REGISTER': {
-      const { serverUrl } = await chrome.storage.local.get('serverUrl');
-      let accessToken = await getValidAccessToken();
+      const accessToken = await getValidAccessToken();
       if (!accessToken) return { ok: false, error: 'Not authenticated' };
+      const serverUrl = await getServerUrl();
       try {
-        const info = await registerDevice(serverUrl || 'http://localhost:8080', accessToken);
+        const info = await registerDevice(serverUrl, accessToken);
         return { ok: true, ...info };
       } catch (err) {
         if (String(err?.message || '').includes('401')) {
           const refreshed = await refreshSession().catch(() => null);
           if (refreshed?.accessToken) {
-            const info = await registerDevice(serverUrl || 'http://localhost:8080', refreshed.accessToken);
+            const info = await registerDevice(serverUrl, refreshed.accessToken);
             return { ok: true, ...info };
           }
         }
@@ -714,17 +812,17 @@ async function syncAllBrowserCookies(serverUrl, accessToken) {
     }
 
     case 'DEVICE_LIST': {
-      const { serverUrl } = await chrome.storage.local.get('serverUrl');
-      let accessToken = await getValidAccessToken();
+      const accessToken = await getValidAccessToken();
       if (!accessToken) return { items: [] };
+      const serverUrl = await getServerUrl();
       try {
-        const items = await fetchUserDevices(serverUrl || 'http://localhost:8080', accessToken);
+        const items = await fetchUserDevices(serverUrl, accessToken);
         return { items };
       } catch (err) {
         if (String(err?.message || '').includes('401')) {
           const refreshed = await refreshSession().catch(() => null);
           if (refreshed?.accessToken) {
-            const items = await fetchUserDevices(serverUrl || 'http://localhost:8080', refreshed.accessToken);
+            const items = await fetchUserDevices(serverUrl, refreshed.accessToken);
             return { items };
           }
         }
@@ -733,16 +831,36 @@ async function syncAllBrowserCookies(serverUrl, accessToken) {
     }
 
     case 'DEVICE_REVOKE': {
-      const { serverUrl } = await chrome.storage.local.get('serverUrl');
-      let accessToken = await getValidAccessToken();
+      const accessToken = await getValidAccessToken();
       if (!accessToken) return { ok: false, error: 'Not authenticated' };
+      const serverUrl = await getServerUrl();
       try {
-        return await revokeDevice(serverUrl || 'http://localhost:8080', accessToken, msg.deviceId);
+        return await revokeDevice(serverUrl, accessToken, msg.deviceId);
       } catch (err) {
         if (String(err?.message || '').includes('401')) {
           const refreshed = await refreshSession().catch(() => null);
           if (refreshed?.accessToken) {
-            return await revokeDevice(serverUrl || 'http://localhost:8080', refreshed.accessToken, msg.deviceId);
+            return await revokeDevice(serverUrl, refreshed.accessToken, msg.deviceId);
+          }
+        }
+        throw err;
+      }
+    }
+
+    case 'DEVICE_ADOPT': {
+      const accessToken = await getValidAccessToken();
+      if (!accessToken) return { ok: false, error: 'Not authenticated' };
+      if (typeof msg.deviceId !== 'string' || !msg.deviceId) {
+        return { ok: false, error: 'deviceId is required' };
+      }
+      const serverUrl = await getServerUrl();
+      try {
+        return await adoptDevice(serverUrl, accessToken, msg.deviceId);
+      } catch (err) {
+        if (err?.status === 401 || String(err?.message || '').includes('401')) {
+          const refreshed = await refreshSession().catch(() => null);
+          if (refreshed?.accessToken) {
+            return await adoptDevice(serverUrl, refreshed.accessToken, msg.deviceId);
           }
         }
         throw err;
@@ -750,68 +868,68 @@ async function syncAllBrowserCookies(serverUrl, accessToken) {
     }
 
     case 'SYNC_PULL_SESSIONS': {
-      const { serverUrl } = await chrome.storage.local.get('serverUrl');
-      let accessToken = await getValidAccessToken();
-      if (!accessToken) return { sessions: [] };
+      const ctx = await authContext();
+      if (!ctx) return { sessions: [] };
       try {
-        const sessions = await fetchRemoteSessions(serverUrl || 'http://localhost:8080', accessToken);
+        const sessions = await fetchRemoteSessions(ctx.serverUrl, ctx.accessToken);
         return { sessions };
       } catch (err) {
-        if (String(err?.message || '').includes('401')) {
-          const refreshed = await refreshSession().catch(() => null);
-          if (refreshed?.accessToken) {
-            const sessions = await fetchRemoteSessions(serverUrl || 'http://localhost:8080', refreshed.accessToken);
-            return { sessions };
-          }
+        if (err?.code === 'vault_locked') {
+          return { sessions: [], vaultLocked: true };
         }
         return { sessions: [] };
       }
     }
 
     case 'SYNC_PUSH_DOMAIN': {
-      const { serverUrl } = await chrome.storage.local.get('serverUrl');
-      let accessToken = await getValidAccessToken();
-      if (!accessToken) throw new Error('Not authenticated');
-      try {
-        return await pushDomainSession(
-          serverUrl || 'http://localhost:8080',
-          accessToken,
-          msg.host,
-          msg.cookies,
-          msg.baseVersion || 0,
-        );
-      } catch (err) {
-        if (String(err?.message || '').includes('401')) {
-          const refreshed = await refreshSession().catch(() => null);
-          if (refreshed?.accessToken) {
-            return await pushDomainSession(
-              serverUrl || 'http://localhost:8080',
-              refreshed.accessToken,
-              msg.host,
-              msg.cookies,
-              msg.baseVersion || 0,
-            );
-          }
-        }
-        throw err;
+      const ctx = await authContext();
+      if (!ctx) throw new Error('Not authenticated');
+      if (!(await isConsented())) {
+        throw new Error('Consent is required before syncing sessions.');
       }
+      if (!(await vaultUnlocked())) {
+        throw new Error('Vault is locked. Unlock with your master password first.');
+      }
+      const result = await pushDomainSession(
+        ctx.serverUrl,
+        ctx.accessToken,
+        msg.host,
+        msg.cookies,
+        msg.baseVersion || 0,
+      );
+      // An explicit per-site save is what makes the site "granted" for future
+      // restore prompts and opt-in auto-sync.
+      await grantSite(msg.host);
+      return result;
     }
 
     case 'SYNC_PUSH_ALL': {
-      const { serverUrl } = await chrome.storage.local.get('serverUrl');
-      let accessToken = await getValidAccessToken();
-      if (!accessToken) {
-        const refreshed = await refreshSession().catch(() => null);
-        accessToken = refreshed?.accessToken;
+      // Explicit action only. One click, one upload of the sites the user has
+      // granted — never a hidden background sweep of every cookie.
+      if (msg.explicit !== true) {
+        throw new Error('Explicit confirmation is required to upload sessions.');
       }
-      if (!accessToken) throw new Error('Not authenticated');
+      if (!(await isConsented())) {
+        throw new Error('Consent is required before syncing sessions.');
+      }
+      if (!(await vaultUnlocked())) {
+        throw new Error('Vault is locked. Unlock with your master password first.');
+      }
+      const ctx = await authContext();
+      if (!ctx) throw new Error('Not authenticated');
 
-      const result = await syncAllBrowserCookies(serverUrl || 'http://localhost:8080', accessToken);
+      const hosts = msg.hosts?.length
+        ? msg.hosts
+        : await grantedHosts();
+
+      const result = await syncHosts(ctx.serverUrl, ctx.accessToken, hosts);
 
       return {
         ok: true,
-        syncedDomainsCount: result?.syncedCount || 0,
-        totalCookiesCount: result?.totalCookiesCount || 0,
+        syncedDomainsCount: result.syncedCount || 0,
+        totalCookiesCount: result.totalCookiesCount || 0,
+        conflicts: result.conflicts || [],
+        hosts: result.hosts || [],
       };
     }
 
@@ -824,7 +942,6 @@ async function syncAllBrowserCookies(serverUrl, accessToken) {
       try {
         const query = msg.domain ? { domain: msg.domain } : {};
         const cookies = await chrome.cookies.getAll(query);
-        // Exclude all localhost, 127.0.0.1, ::1 tokens & cookies
         const filtered = (cookies || []).filter((c) => !isLocalhost(c.domain));
         return { cookies: filtered };
       } catch (e) {
@@ -835,34 +952,35 @@ async function syncAllBrowserCookies(serverUrl, accessToken) {
     case 'DELETE_DOMAIN_SESSION': {
       const { host, deleteServer = false } = msg;
       if (!host) throw new Error('Host required');
+      const cleanHost = normalizeHost(host);
 
-      // 1. Remove cookies matching domain from browser
-      const cookiesRemoved = await removeDomainCookies(host);
+      // 1. Remove cookies for this exact site.
+      const cookiesRemoved = await removeDomainCookies(cleanHost);
 
-      // 2. Remove local storage swap backups and snapshots
-      const storageKeysRemoved = await removeDomainLocalStorage(host);
+      // 2. Remove local snapshots and swap backups for this site.
+      const storageKeysRemoved = await removeDomainLocalStorage(cleanHost);
 
-      // 3. Delete session from cloud server ONLY if deleteServer is explicitly requested
+      // 3. Tombstone this exact host in the cloud, only when explicitly asked.
       let serverDeleted = false;
       if (deleteServer) {
         try {
-          const { serverUrl } = await chrome.storage.local.get('serverUrl');
-          const accessToken = await getValidAccessToken();
-          if (accessToken) {
+          const ctx = await authContext();
+          if (ctx) {
             serverDeleted = await deleteDomainSessionFromServer(
-              serverUrl || 'http://localhost:8080',
-              accessToken,
-              host,
+              ctx.serverUrl,
+              ctx.accessToken,
+              cleanHost,
             );
           }
+          await revokeSite(cleanHost);
         } catch (e) {
-          console.warn('[switch] server session deletion error:', e);
+          console.warn('[switch] server session deletion error:', e?.message || e);
         }
       }
 
       return {
         ok: true,
-        host,
+        host: cleanHost,
         cookiesRemovedCount: cookiesRemoved.length,
         storageKeysRemoved,
         serverDeleted,
@@ -874,7 +992,7 @@ async function syncAllBrowserCookies(serverUrl, accessToken) {
       if (!cookie || !cookie.name || !cookie.domain) {
         throw new Error('Invalid cookie to delete');
       }
-      const host = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain;
+      const host = normalizeHost(cookie.domain);
       const path = cookie.path || '/';
       const candidateUrls = [`https://${host}${path}`, `http://${host}${path}`];
 
@@ -883,7 +1001,11 @@ async function syncAllBrowserCookies(serverUrl, accessToken) {
         try {
           const details = { url, name: cookie.name };
           if (cookie.storeId) details.storeId = cookie.storeId;
-          if (cookie.partitionKey && typeof cookie.partitionKey === 'object' && cookie.partitionKey.topLevelSite) {
+          if (
+            cookie.partitionKey &&
+            typeof cookie.partitionKey === 'object' &&
+            cookie.partitionKey.topLevelSite
+          ) {
             details.partitionKey = { topLevelSite: cookie.partitionKey.topLevelSite };
           }
           const res = await chrome.cookies.remove(details);
@@ -901,44 +1023,29 @@ async function syncAllBrowserCookies(serverUrl, accessToken) {
   }
 }
 
-/**
- * Accurately match all cookies belonging to a domain and its subdomains.
- */
 function matchesDomain(cookieDomain, targetDomain) {
-  if (!cookieDomain || !targetDomain) return false;
-  const cd = String(cookieDomain).replace(/^\./, '').toLowerCase().trim();
-  const td = String(targetDomain).replace(/^\./, '').toLowerCase().trim();
-  const rootTd = td.split('.').slice(-2).join('.');
-  const rootCd = cd.split('.').slice(-2).join('.');
-
-  return (
-    cd === td ||
-    cd === rootTd ||
-    rootCd === rootTd ||
-    cd.endsWith('.' + td) ||
-    cd.endsWith('.' + rootTd) ||
-    td.endsWith('.' + cd)
-  );
+  return hostMatches(cookieDomain, targetDomain);
 }
 
-/**
- * Remove all cookies matching a domain with fallback URLs and partitionKey handling.
- */
 async function removeDomainCookies(domain, reloadTabs = true) {
   if (!domain) return [];
   const allCookies = await chrome.cookies.getAll({});
-  const dClean = String(domain).replace(/^\./, '').toLowerCase().trim();
-  const rootDomain = dClean.split('.').slice(-2).join('.');
+  const dClean = normalizeHost(domain);
+  if (!dClean) return [];
 
   const matching = allCookies.filter((c) => matchesDomain(c.domain, dClean));
   const removed = [];
 
   for (const c of matching) {
-    const host = c.domain.startsWith('.') ? c.domain.slice(1) : c.domain;
+    const host = normalizeHost(c.domain);
     const path = c.path || '/';
 
-    let partitionKey = undefined;
-    if (c.partitionKey && typeof c.partitionKey === 'object' && c.partitionKey.topLevelSite) {
+    let partitionKey;
+    if (
+      c.partitionKey &&
+      typeof c.partitionKey === 'object' &&
+      c.partitionKey.topLevelSite
+    ) {
       partitionKey = { topLevelSite: c.partitionKey.topLevelSite };
     }
 
@@ -946,7 +1053,6 @@ async function removeDomainCookies(domain, reloadTabs = true) {
       `https://${host}${path}`,
       `http://${host}${path}`,
       `https://${dClean}${path}`,
-      `https://${rootDomain}${path}`,
     ];
 
     let success = false;
@@ -960,41 +1066,49 @@ async function removeDomainCookies(domain, reloadTabs = true) {
           success = true;
           break;
         }
-      } catch (e) {}
+      } catch {}
     }
 
-    if (success) {
-      removed.push(c.name);
-    }
+    if (success) removed.push(c.name);
   }
 
-  // Clear localStorage, sessionStorage & IndexedDB on open tabs of this domain, and reload
   if (reloadTabs) {
     try {
       const tabs = await chrome.tabs.query({});
       for (const tab of tabs) {
         if (!tab.url) continue;
         try {
-          const tabHost = new URL(tab.url).hostname.toLowerCase();
-          if (matchesDomain(tabHost, dClean)) {
-            await chrome.scripting.executeScript({
-              target: { tabId: tab.id },
-              func: (hostName) => {
-                try { localStorage.clear(); } catch {}
-                try { sessionStorage.clear(); } catch {}
-                try {
-                  if (window.indexedDB && indexedDB.databases) {
-                    indexedDB.databases().then((dbs) => {
-                      for (const db of dbs) {
-                        if (db.name) try { indexedDB.deleteDatabase(db.name); } catch {}
-                      }
-                    }).catch(() => {});
-                  }
-                } catch {}
-              },
-              args: [dClean],
-            }).catch(() => {});
-            // Reload tab to establish fresh logged-out state
+          const tabHost = normalizeHost(new URL(tab.url).hostname);
+          if (hostMatches(tabHost, dClean)) {
+            await chrome.scripting
+              .executeScript({
+                target: { tabId: tab.id },
+                func: () => {
+                  try {
+                    localStorage.clear();
+                  } catch {}
+                  try {
+                    sessionStorage.clear();
+                  } catch {}
+                  try {
+                    if (window.indexedDB && indexedDB.databases) {
+                      indexedDB
+                        .databases()
+                        .then((dbs) => {
+                          for (const db of dbs) {
+                            if (db.name) {
+                              try {
+                                indexedDB.deleteDatabase(db.name);
+                              } catch {}
+                            }
+                          }
+                        })
+                        .catch(() => {});
+                    }
+                  } catch {}
+                },
+              })
+              .catch(() => {});
             chrome.tabs.reload(tab.id);
           }
         } catch {}
@@ -1005,28 +1119,25 @@ async function removeDomainCookies(domain, reloadTabs = true) {
   return removed;
 }
 
-/**
- * Remove local storage snapshots and swap backups related to a domain.
- */
 async function removeDomainLocalStorage(domain) {
   if (!domain) return [];
-  const dClean = String(domain).replace(/^\./, '').toLowerCase().trim();
-  const rootDomain = dClean.split('.').slice(-2).join('.');
+  const dClean = normalizeHost(domain);
+  const swapKey = getRegistrableDomain(dClean) || dClean;
 
-  // Remove from persistent swap store
-  await removeSwapRecord(rootDomain);
+  await removeSwapRecord(swapKey);
   await removeSwapRecord(dClean);
 
   const allStorage = await chrome.storage.local.get(null);
   const keysToRemove = [];
   for (const key of Object.keys(allStorage || {})) {
     if (
-      key === `swap_backup_${rootDomain}` ||
-      key === `swap_backup_${dClean}` ||
-      key === `snap_${rootDomain}` ||
-      key === `snap_${dClean}` ||
-      (key.startsWith('swap_backup_') && (key.includes(dClean) || key.includes(rootDomain))) ||
-      (key.startsWith('snap_') && (key.includes(dClean) || key.includes(rootDomain)))
+      key === `snap:${dClean}` ||
+      key === `snap:${swapKey}` ||
+      key === `switch:pending:${dClean}` ||
+      key === `switch:pending:${swapKey}` ||
+      key === `attempt:${dClean}` ||
+      key === `rejected:${dClean}` ||
+      key === `never:${dClean}`
     ) {
       keysToRemove.push(key);
     }
@@ -1038,15 +1149,15 @@ async function removeDomainLocalStorage(domain) {
 }
 
 // ============================================================================
-// REAL-TIME OPTIMAL COOKIE CHANGE WATCHER & DB AUTO-SYNC
-// Debounces changes per root domain to avoid excessive API requests.
-// Automatically:
-//  1. Detects website logouts (auth cookies cleared) -> Deletes session from DB.
-//  2. Detects website logins/updates (valid auth cookies) -> Updates DB with fresh session.
+// OPT-IN COOKIE WATCHER
+//
+// Inert unless the user has explicitly enabled auto-sync AND granted the site.
+// It only ever touches the exact cookie host; it never uploads a site the user
+// has not opened/saved.
 // ============================================================================
 const COOKIE_SYNC_DEBOUNCE_MS = 2500;
 const pendingDomainSyncs = new Map();
-const lastSyncedSignatures = new Map(); // domain -> signature of auth cookies
+const lastSyncedSignatures = new Map();
 
 function computeCookiesSignature(cookies) {
   if (!cookies || !cookies.length) return '';
@@ -1056,74 +1167,74 @@ function computeCookiesSignature(cookies) {
     .join('|');
 }
 
-function getRootDomainFromCookie(cookie) {
+function cookieHost(cookie) {
   if (!cookie || !cookie.domain) return null;
-  const d = String(cookie.domain).replace(/^\./, '').toLowerCase().trim();
-  if (!d || isLocalhost(d) || isSearchEngine(d)) return null;
-  const parts = d.split('.');
-  if (parts.length > 2) {
-    return parts.slice(-2).join('.');
-  }
+  const d = normalizeHost(cookie.domain);
+  if (!d || isLocalhost(d)) return null;
   return d;
 }
 
 chrome.cookies.onChanged.addListener((changeInfo) => {
-  const rootDomain = getRootDomainFromCookie(changeInfo.cookie);
-  if (!rootDomain) return;
-
-  // Clear any existing timer for this domain
-  if (pendingDomainSyncs.has(rootDomain)) {
-    clearTimeout(pendingDomainSyncs.get(rootDomain));
+  if (changeInfo?.removed) {
+    // Removals are part of normal browsing; only handle value writes/updates.
   }
 
-  // Set debounced sync
+  const host = cookieHost(changeInfo.cookie);
+  if (!host) return;
+
+  if (pendingDomainSyncs.has(host)) clearTimeout(pendingDomainSyncs.get(host));
+
   const timer = setTimeout(async () => {
-    pendingDomainSyncs.delete(rootDomain);
+    pendingDomainSyncs.delete(host);
     try {
-      // 1. Consent and authentication check
       if (!(await isConsented())) return;
-      const authStatus = await getAuthStatus();
-      if (!authStatus.loggedIn) return;
-      const accessToken = await getValidAccessToken();
-      if (!accessToken) return;
 
-      const { serverUrl } = await chrome.storage.local.get('serverUrl');
-      const baseServer = serverUrl || 'http://localhost:8080';
-      const currentDeviceId = await getOrCreateDeviceId();
+      const { [AUTO_SYNC_KEY]: autoSync } = await chrome.storage.local.get(AUTO_SYNC_KEY);
+      if (autoSync !== true) return; // opt-in only
 
-      // 2. If domain is actively swapped, do not clobber with automatic sync
-      if (await isDomainSwapped(rootDomain)) return;
+      const granted = await grantedHosts();
+      if (!granted.some((g) => hostMatches(g, host))) return;
 
-      // 3. Inspect all current cookies for this domain
-      const currentCookies = await chrome.cookies.getAll({ domain: rootDomain });
-      const authCookies = (currentCookies || []).filter((c) => isAuthToken(c.name, c.value));
+      const ctx = await authContext();
+      if (!ctx) return;
+      if (!(await vaultUnlocked())) return;
 
-      // CASE A: USER LOGGED OUT OF THE WEBSITE
-      // (No auth cookies remaining for this domain)
+      if (await isDomainSwapped(getRegistrableDomain(host) || host)) return;
+
+      const currentCookies = await chrome.cookies.getAll({ domain: host });
+      const authCookies = (currentCookies || []).filter((c) =>
+        isAuthToken(c.name, c.value),
+      );
+
       if (authCookies.length === 0) {
-        lastSyncedSignatures.delete(rootDomain);
-        // Automatically delete the stale session for this device from DB
-        await deleteDomainSessionFromServer(baseServer, accessToken, rootDomain, currentDeviceId);
-        log(`Detected logout on ${rootDomain} — removed session from cloud DB.`);
+        lastSyncedSignatures.delete(host);
+        await deleteDomainSessionFromServer(
+          ctx.serverUrl,
+          ctx.accessToken,
+          host,
+          await getOrCreateDeviceId(),
+        );
+        log(`Detected logout on ${host} — tombstoned this device's copy.`);
         return;
       }
 
-      // CASE B: USER LOGGED IN OR COOKIES UPDATED
-      const newSignature = computeCookiesSignature(authCookies);
-      const prevSignature = lastSyncedSignatures.get(rootDomain);
+      const signature = computeCookiesSignature(authCookies);
+      if (signature === lastSyncedSignatures.get(host)) return;
 
-      if (newSignature === prevSignature) {
-        // No meaningful auth change; skip network call
-        return;
-      }
-
-      lastSyncedSignatures.set(rootDomain, newSignature);
-      await pushDomainSession(baseServer, accessToken, rootDomain, currentCookies);
-      log(`Auto-synced updated session for ${rootDomain} to cloud DB.`);
+      const versions = await currentVersions(ctx.serverUrl, ctx.accessToken);
+      await pushDomainSession(
+        ctx.serverUrl,
+        ctx.accessToken,
+        host,
+        currentCookies,
+        versions.get(host) ?? 0,
+      );
+      lastSyncedSignatures.set(host, signature);
+      log(`Auto-synced updated session for ${host}.`);
     } catch (err) {
-      warn(`Auto-sync error for ${rootDomain}:`, err);
+      warn(`Auto-sync error for ${host}:`, err);
     }
   }, COOKIE_SYNC_DEBOUNCE_MS);
 
-  pendingDomainSyncs.set(rootDomain, timer);
+  pendingDomainSyncs.set(host, timer);
 });

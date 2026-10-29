@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <g transform="translate(6, 4)">
+    <!-- NPCI Green Primary Chevron -->
+    <polygon points="17,3 27,3 15,37 5,37" fill="#00843d"/>
+    <!-- NPCI Orange/Saffron Accent Chevron -->
+    <polygon points="29,3 37,3 25,37 17,37" fill="#f47920"/>
+  </g>
+</svg>

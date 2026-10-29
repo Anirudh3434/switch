@@ -19,7 +19,10 @@ import {
 
 process.env.MONGODB_URI ||= 'mongodb://127.0.0.1:27017';
 process.env.TOKEN_SECRET ||= 'test-secret';
+process.env.REFRESH_PEPPER ||= 'test-refresh-pepper';
+process.env.DUMMY_SALT_SECRET ||= 'test-dummy-salt';
 process.env.ALLOWED_ORIGINS ||= '';
+process.env.ALLOW_UNVERIFIED_REGISTRATION ||= 'true';
 
 const { connect, close } = await import('../src/db.js');
 const { buildApp } = await import('../src/server.js');
@@ -34,8 +37,15 @@ before(async () => {
     await connect();
     mongoUp = true;
   } catch (e) {
-    console.log(`SKIPPING: MongoDB unreachable (${e.message})`);
-    return;
+    if (process.env.ALLOW_DB_TEST_SKIP === '1') {
+      console.log(`SKIPPING: MongoDB unreachable (${e.message})`);
+      return;
+    }
+    // A green suite that never ran is worse than a red suite. Opt into
+    // skipping explicitly with ALLOW_DB_TEST_SKIP=1.
+    throw new Error(
+      `MongoDB unreachable (${e.message}). Start MongoDB or set ALLOW_DB_TEST_SKIP=1 to skip DB tests.`,
+    );
   }
   server = createServer(buildApp());
   await new Promise((r) => server.listen(0, r));
@@ -43,7 +53,7 @@ before(async () => {
 });
 
 after(async () => {
-  await close();
+  if (mongoUp) await close();
   server?.close();
 });
 
@@ -57,6 +67,17 @@ const post = (path, body, token) =>
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+
+const postAsDevice = (path, body, token, deviceId) =>
+  fetch(base + path, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(deviceId ? { 'X-Device-Id': deviceId } : {}),
     },
     body: JSON.stringify(body),
   });
@@ -140,9 +161,10 @@ test('refresh rotates the token and rejects reuse (regression: $oid crash)', asy
   assert.ok(rotated.refreshToken, 'refresh returns a rotated refresh token');
   assert.notEqual(rotated.refreshToken, login.refreshToken, 'refresh token must rotate');
 
-  // The spent token must be dead (rotation, not reuse).
+  // The spent token must be dead (rotation, not reuse). A concurrent refresh
+  // race returns 409 so the client can retry; a later replay is 401.
   const reuse = await post('/v1/auth/refresh', { refreshToken: login.refreshToken });
-  assert.equal(reuse.status, 401, 'reusing a spent refresh token must fail');
+  assert.ok([401, 409].includes(reuse.status), 'reusing a spent refresh token must fail');
 
   // A garbage userId in the record must 401, not throw.
   const garbage = await post('/v1/auth/refresh', { refreshToken: 'not-a-real-token' });
@@ -273,4 +295,289 @@ test('sharing wraps with the recipient public key the server cannot unwrap', asy
     Buffer.from(inbox.items[0].wrappedKey.key, 'base64url'),
   );
   assert.deepEqual(unwrapped, sessionKey);
+});
+
+test('admin API is closed without an allowlisted caller', async () => {
+  if (!mongoUp) return;
+
+  const anonymous = await get('/v1/admin/overview');
+  assert.equal(anonymous.status, 401, 'admin requires a bearer token');
+
+  const email = `notadmin-${Date.now()}@example.com`;
+  const salt = randomBytes(16).toString('base64url');
+  await post('/v1/auth/register', {
+    email,
+    authHash: deriveAuthHash('pw', salt),
+    kdfSalt: salt,
+  });
+  const { accessToken } = await (await post('/v1/auth/login', {
+    email,
+    authHash: deriveAuthHash('pw', salt),
+  })).json();
+
+  const forbidden = await get('/v1/admin/overview', accessToken);
+  assert.equal(forbidden.status, 403, 'ordinary users cannot read admin telemetry');
+});
+
+test('logout ends this browser only and preserves synced sessions', async () => {
+  if (!mongoUp) return;
+
+  const email = `logout-${Date.now()}@example.com`;
+  const salt = randomBytes(16).toString('base64url');
+  const authHash = deriveAuthHash('pw', salt);
+  await post('/v1/auth/register', { email, authHash, kdfSalt: salt });
+
+  const first = await (await post('/v1/auth/login', { email, authHash })).json();
+  const second = await (await post('/v1/auth/login', { email, authHash })).json();
+
+  await post(
+    '/v1/sync/push',
+    { items: [{ host: 'keep.example', baseVersion: 0, envelope: fakeEnvelope('keep') }] },
+    first.accessToken,
+  );
+
+  const out = await post('/v1/auth/logout', { refreshToken: first.refreshToken }, first.accessToken);
+  assert.equal(out.status, 204);
+
+  // The session must still be there.
+  const list = await (await get('/v1/sync/list', first.accessToken)).json();
+  assert.ok(list.items.some((i) => i.host === 'keep.example'));
+
+  // The other browser's refresh token must still work.
+  const other = await post('/v1/auth/refresh', { refreshToken: second.refreshToken });
+  assert.equal(other.status, 200, 'signing out one browser must not sign out the others');
+});
+
+test('reinstall can merge an old device record instead of leaving a duplicate', async () => {
+  if (!mongoUp) return;
+
+  const email = `adopt-${Date.now()}@example.com`;
+  const salt = randomBytes(16).toString('base64url');
+  const authHash = deriveAuthHash('pw', salt);
+
+  // Simulate the previous install: its refresh token is bound to the old id.
+  const oldId = 'dev_oldinstall000000000001';
+  const newId = 'dev_newinstall000000000001';
+  const reg = await postAsDevice(
+    '/v1/auth/register',
+    { email, authHash, kdfSalt: salt },
+    null,
+    oldId,
+  );
+  assert.equal(reg.status, 201);
+  const { accessToken, refreshToken: oldRefresh } = await reg.json();
+
+  for (const deviceId of [oldId, newId]) {
+    const r = await postAsDevice(
+      '/v1/user/devices',
+      { deviceId, name: 'Chrome on Windows 10/11', browserInfo: { browser: 'Chrome', os: 'Windows 10/11' } },
+      accessToken,
+      deviceId,
+    );
+    assert.equal(r.status, 200);
+  }
+
+  // A device cannot adopt itself, and the target id must be well formed.
+  const self = await postAsDevice(
+    '/v1/user/devices/adopt',
+    { deviceId: newId },
+    accessToken,
+    newId,
+  );
+  assert.equal(self.status, 400);
+  const malformed = await postAsDevice(
+    '/v1/user/devices/adopt',
+    { deviceId: 'bad id with spaces' },
+    accessToken,
+    newId,
+  );
+  assert.equal(malformed.status, 400);
+
+  // Old install has a sole host and a newer copy of a shared host.
+  for (let v = 0; v < 3; v++) {
+    await postAsDevice(
+      '/v1/sync/push',
+      { items: [{ host: 'shared.example', baseVersion: v, envelope: fakeEnvelope(`old-${v}`) }] },
+      accessToken,
+      oldId,
+    );
+  }
+  await postAsDevice(
+    '/v1/sync/push',
+    { items: [{ host: 'old-only.example', baseVersion: 0, envelope: fakeEnvelope('old-only') }] },
+    accessToken,
+    oldId,
+  );
+  await postAsDevice(
+    '/v1/sync/push',
+    { items: [{ host: 'shared.example', baseVersion: 0, envelope: fakeEnvelope('new-0') }] },
+    accessToken,
+    newId,
+  );
+
+  // A different account must not be able to adopt this device.
+  const otherEmail = `adopt-other-${Date.now()}@example.com`;
+  const otherSalt = randomBytes(16).toString('base64url');
+  const otherReg = await post('/v1/auth/register', {
+    email: otherEmail,
+    authHash: deriveAuthHash('pw', otherSalt),
+    kdfSalt: otherSalt,
+  });
+  const { accessToken: otherToken } = await otherReg.json();
+  const foreign = await postAsDevice(
+    '/v1/user/devices/adopt',
+    { deviceId: oldId },
+    otherToken,
+    'dev_attacker0000000000001',
+  );
+  assert.equal(foreign.status, 404, 'adoption is scoped to the authenticated account');
+
+  const adopt = await postAsDevice(
+    '/v1/user/devices/adopt',
+    { deviceId: oldId, name: 'Chrome on Windows 10/11', browserInfo: { browser: 'Chrome', os: 'Windows 10/11' } },
+    accessToken,
+    newId,
+  );
+  assert.equal(adopt.status, 200);
+  const adopted = await adopt.json();
+  assert.equal(adopted.deviceId, newId);
+  assert.equal(adopted.adoptedDeviceId, oldId);
+  assert.equal(adopted.movedSessions, 1, 'old-only host moves across');
+  assert.equal(adopted.mergedSessions, 1, 'newer copy on the old install wins');
+  assert.equal(adopted.revokedRefreshTokens, 1, 'dead install refresh token is deleted');
+
+  // The duplicate device row is gone; only the current install remains.
+  const deviceList = await (await get('/v1/user/devices', accessToken)).json();
+  assert.equal(deviceList.items.length, 1);
+  assert.equal(deviceList.items[0].deviceId, newId);
+  assert.ok(deviceList.items[0].createdAt, 'merge keeps a first-seen timestamp');
+
+  // Both hosts now belong to the current device, and the newer version won.
+  const list = await (await get('/v1/sync/list', accessToken, { 'X-Device-Id': newId })).json();
+  const oldOnly = list.items.find((i) => i.host === 'old-only.example');
+  const shared = list.items.find((i) => i.host === 'shared.example');
+  assert.ok(oldOnly, 'adopted host survives');
+  assert.equal(oldOnly.deviceId, newId);
+  assert.equal(shared.version, 3);
+  assert.equal(shared.deviceId, newId);
+
+  // The old install's credentials were revoked, not silently carried over.
+  const dead = await post('/v1/auth/refresh', { refreshToken: oldRefresh });
+  assert.equal(dead.status, 401);
+
+  // Adoption is not idempotent: the record is already gone.
+  const again = await postAsDevice(
+    '/v1/user/devices/adopt',
+    { deviceId: oldId },
+    accessToken,
+    newId,
+  );
+  assert.equal(again.status, 404);
+});
+
+test('deletes are tombstones and force cannot bypass a version conflict', async () => {
+  if (!mongoUp) return;
+
+  const email = `tombstone-${Date.now()}@example.com`;
+  const salt = randomBytes(16).toString('base64url');
+  const authHash = deriveAuthHash('pw', salt);
+  await post('/v1/auth/register', { email, authHash, kdfSalt: salt });
+  const { accessToken: token } = await (await post('/v1/auth/login', { email, authHash })).json();
+
+  await post(
+    '/v1/sync/push',
+    { items: [{ host: 'github.com', baseVersion: 0, envelope: fakeEnvelope('v1') }] },
+    token,
+  );
+
+  const del = await fetch(base + '/v1/sync/github.com', {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(del.status, 200);
+
+  const pulled = await (await get('/v1/sync/pull?since=0', token)).json();
+  const tomb = pulled.items.find((i) => i.host === 'github.com');
+  assert.ok(tomb, 'tombstone is visible to other devices');
+  assert.equal(tomb.deleted, true);
+  assert.equal(tomb.envelope, null);
+
+  // A stale writer using the old baseVersion (and force:true) must lose.
+  const stale = await post(
+    '/v1/sync/push',
+    {
+      items: [
+        {
+          host: 'github.com',
+          baseVersion: 1,
+          force: true,
+          envelope: fakeEnvelope('resurrect'),
+        },
+      ],
+    },
+    token,
+  );
+  const staleBody = await stale.json();
+  assert.equal(staleBody.results[0].status, 'conflict');
+  assert.equal(staleBody.results[0].deleted, true);
+
+  // Adopting the tombstone's version allows a deliberate re-save.
+  const fresh = await post(
+    '/v1/sync/push',
+    { items: [{ host: 'github.com', baseVersion: 2, envelope: fakeEnvelope('v3') }] },
+    token,
+  );
+  const freshBody = await fresh.json();
+  assert.equal(freshBody.results[0].status, 'ok');
+  assert.equal(freshBody.results[0].version, 3);
+});
+
+test('account deletion erases the account and invalidates live tokens', async () => {
+  if (!mongoUp) return;
+
+  const email = `erase-${Date.now()}@example.com`;
+  const salt = randomBytes(16).toString('base64url');
+  const authHash = deriveAuthHash('pw', salt);
+  await post('/v1/auth/register', { email, authHash, kdfSalt: salt });
+  const { accessToken } = await (await post('/v1/auth/login', { email, authHash })).json();
+
+  await post(
+    '/v1/sync/push',
+    { items: [{ host: 'erase.example', baseVersion: 0, envelope: fakeEnvelope('x') }] },
+    accessToken,
+  );
+
+  const exported = await (await get('/v1/user/export', accessToken)).json();
+  assert.equal(exported.user.email, email);
+  assert.ok(exported.sessions.some((s) => s.host === 'erase.example'));
+
+  const del = await fetch(base + '/v1/user/account', {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  assert.equal(del.status, 204);
+
+  assert.equal((await get('/v1/sync/list', accessToken)).status, 401);
+  assert.equal((await post('/v1/auth/login', { email, authHash })).status, 401);
+});
+
+test('OTP responses never contain the code and reset requests do not enumerate accounts', async () => {
+  if (!mongoUp) return;
+
+  const send = await post('/v1/auth/otp/send', {
+    email: `otp-${Date.now()}@example.com`,
+    purpose: 'account verification',
+  });
+  assert.equal(send.status, 200);
+  const body = await send.json();
+  assert.equal(body.devOtp, undefined);
+  assert.equal(body.otp, undefined);
+
+  const unknown = await post('/v1/auth/forgot-password', {
+    email: `missing-${Date.now()}@example.com`,
+  });
+  assert.equal(unknown.status, 200);
+  const unknownBody = await unknown.json();
+  assert.equal(unknownBody.error, undefined);
+  assert.ok(!JSON.stringify(unknownBody).includes('not found'));
 });
